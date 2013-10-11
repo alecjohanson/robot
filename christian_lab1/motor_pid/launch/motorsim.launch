@@ -1,0 +1,7 @@
+<launch>
+  <group ns="motorsim1">
+    <node pkg="fake_motors" name="motors" type="fake_motors"/>
+    <node pkg="motor_pid" name="controller" type="motor_pid"/>
+    <node pkg="turtlesim" name="keyinput" type="turtle_teleop_key" launch-prefix="xterm -e"/>
+  </group>
+</launch>

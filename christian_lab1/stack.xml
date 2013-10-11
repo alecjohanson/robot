@@ -1,0 +1,11 @@
+<stack>
+  <description brief="Introductory exercise session on ROS for DD2425 course - solution"> 
+    Contains a closed-loop motor controller and keyboard control for the setpoint.
+  </description>
+  <author>Christian Thiessen</author>
+  <license>BSD, GPL</license>  
+  <review status="experimental" notes=""/>
+  <url>http://ros.org/wiki/ros_</url>
+  <version>0.1.0</version>
+
+</stack>

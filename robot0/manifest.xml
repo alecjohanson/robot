@@ -1,0 +1,14 @@
+<package>
+  <description brief="robot0">
+
+     robot0
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/robot0</url>
+
+</package>
+
+
