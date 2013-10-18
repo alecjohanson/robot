@@ -161,19 +161,6 @@ clean-test-results/fast:
 .PHONY : clean-test-results/fast
 
 #=============================================================================
-# Target rules for targets named milestone0
-
-# Build rule for target.
-milestone0: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 milestone0
-.PHONY : milestone0
-
-# fast build rule for target.
-milestone0/fast:
-	$(MAKE) -f CMakeFiles/milestone0.dir/build.make CMakeFiles/milestone0.dir/build
-.PHONY : milestone0/fast
-
-#=============================================================================
 # Target rules for targets named rosbuild_precompile
 
 # Build rule for target.
@@ -303,20 +290,33 @@ tests/fast:
 	$(MAKE) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/build
 .PHONY : tests/fast
 
+#=============================================================================
+# Target rules for targets named testwall
+
+# Build rule for target.
+testwall: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 testwall
+.PHONY : testwall
+
+# fast build rule for target.
+testwall/fast:
+	$(MAKE) -f CMakeFiles/testwall.dir/build.make CMakeFiles/testwall.dir/build
+.PHONY : testwall/fast
+
 # target to build an object file
-milestone0.o:
-	$(MAKE) -f CMakeFiles/milestone0.dir/build.make CMakeFiles/milestone0.dir/milestone0.o
-.PHONY : milestone0.o
+IRtest.o:
+	$(MAKE) -f CMakeFiles/testwall.dir/build.make CMakeFiles/testwall.dir/IRtest.o
+.PHONY : IRtest.o
 
 # target to preprocess a source file
-milestone0.i:
-	$(MAKE) -f CMakeFiles/milestone0.dir/build.make CMakeFiles/milestone0.dir/milestone0.i
-.PHONY : milestone0.i
+IRtest.i:
+	$(MAKE) -f CMakeFiles/testwall.dir/build.make CMakeFiles/testwall.dir/IRtest.i
+.PHONY : IRtest.i
 
 # target to generate assembly for a file
-milestone0.s:
-	$(MAKE) -f CMakeFiles/milestone0.dir/build.make CMakeFiles/milestone0.dir/milestone0.s
-.PHONY : milestone0.s
+IRtest.s:
+	$(MAKE) -f CMakeFiles/testwall.dir/build.make CMakeFiles/testwall.dir/IRtest.s
+.PHONY : IRtest.s
 
 # Help Target
 help:
@@ -330,7 +330,6 @@ help:
 	@echo "... ROSBUILD_gensrv_lisp"
 	@echo "... clean-test-results"
 	@echo "... edit_cache"
-	@echo "... milestone0"
 	@echo "... rebuild_cache"
 	@echo "... rosbuild_precompile"
 	@echo "... rosbuild_premsgsrvgen"
@@ -342,9 +341,10 @@ help:
 	@echo "... test-results"
 	@echo "... test-results-run"
 	@echo "... tests"
-	@echo "... milestone0.o"
-	@echo "... milestone0.i"
-	@echo "... milestone0.s"
+	@echo "... testwall"
+	@echo "... IRtest.o"
+	@echo "... IRtest.i"
+	@echo "... IRtest.s"
 .PHONY : help
 
 

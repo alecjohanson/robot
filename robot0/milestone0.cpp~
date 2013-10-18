@@ -10,7 +10,7 @@ using namespace differential_drive;
 static ros::Publisher cmd_pub;
 static ros::Subscriber odom_sub;
 
-void followHand(const geometry_msgs::Point &msg){
+void followHand(const differential_drive::AnalogC &msg){
 //this method derives the control of the motors
 
     double x,z;
@@ -23,8 +23,8 @@ void followHand(const geometry_msgs::Point &msg){
     x = msg.y;
     z = msg.x;
 
-    r = pow(x*x + z*z,0.5);
-    alpha = -atan(x/z);
+    r = hypot(x,z);
+    alpha = atan(x/z);
 
 
     /*if ( (r < r0) && ((alpha < a0)||(alpha > -a0)) ){
@@ -33,7 +33,8 @@ void followHand(const geometry_msgs::Point &msg){
     }*/
 
     std::cerr<<x<<' '<<z<<' '<<r<<' '<<alpha<<' '<<std::endl;
-    if(x==0.0 && z==0.0) {
+    if(isnan(alpha)) alpha=0.0;
+    if(isnan(x) || isnan(z)) {
         spd.W1 = 0;
         spd.W2 = 0;
     } else {

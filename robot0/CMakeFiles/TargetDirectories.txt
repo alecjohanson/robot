@@ -3,7 +3,6 @@
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/ROSBUILD_gensrv_cpp.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/ROSBUILD_gensrv_lisp.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/clean-test-results.dir
-/home/robo/ros_workspace/robot/robot0/CMakeFiles/milestone0.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/rosbuild_precompile.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/rosbuild_premsgsrvgen.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/rospack_genmsg.dir
@@ -14,3 +13,4 @@
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/test-results.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/test-results-run.dir
 /home/robo/ros_workspace/robot/robot0/CMakeFiles/tests.dir
+/home/robo/ros_workspace/robot/robot0/CMakeFiles/testwall.dir
