@@ -1,0 +1,15 @@
+/**
+\mainpage
+\htmlinclude manifest.html
+
+\b handdetect 
+
+<!-- 
+Simple object detector for RGB-D sensors.
+Returns the closest object it finds.
+-->
+
+-->
+
+
+*/

@@ -1,0 +1,7 @@
+<launch>
+  <group ns="robot0">
+    <node pkg="handdetect" name="vision" type="handdetect"/>
+    <node pkg="robot0" name="control" type="milestone0"/>
+    <node pkg="turtlesim" name="motors" type="turtle_teleop_key" launch-prefix="xterm -e"/>
+  </group>
+</launch>

@@ -1,0 +1,16 @@
+<package>
+  <description brief="handdetect">
+
+     handdetect
+
+  </description>
+  <author>Christian Thiessen</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/handdetect</url>
+  <depend package="roscpp"/>
+  <depend package="geometry_msgs"/>
+
+</package>
+
+

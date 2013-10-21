@@ -1,0 +1,15 @@
+#ifndef MILESTONE0_H_
+#define MILESTONE0_H_
+/*
+class HandController {
+public:
+    HandController();
+    virtual ~HandController();
+};*/
+
+const double r0 = 400.0;
+const double a0 = 5.0/60.0;
+const double ka = 15.0;
+const double kr = 0.0;
+
+#endif /* MILESTONE0_H_ */
