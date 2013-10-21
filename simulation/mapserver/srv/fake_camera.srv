@@ -1,0 +1,4 @@
+geometry_msgs/Pose2D sensor_view
+float64 fov
+---
+wall[] walls

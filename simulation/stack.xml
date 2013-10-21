@@ -1,0 +1,11 @@
+<stack>
+  <description brief="Simulation of robot environment"> 
+    Using SVG drawings of mazes as input, these nodes simulate sensor input based on
+    the robot's "true" position in the virtual maze and keep track of that position.
+  </description>
+  <author>Alfred Bergman, Christian Thiessen</author>
+  <license>BSD, GPL</license>  
+  <review status="experimental" notes=""/>
+  <url>http://ros.org/wiki/ros_</url>
+  <version>0.1.0</version>
+</stack>

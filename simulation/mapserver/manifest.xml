@@ -1,0 +1,17 @@
+<package>
+  <description brief="mapserver">
+
+     mapserver
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/mapserver</url>
+  <depend package="roslib"/>
+  <depend package="roscpp"/>
+  <depend package="geometry_msgs"/>
+
+</package>
+
+
