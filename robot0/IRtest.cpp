@@ -14,31 +14,49 @@ void followWall(const differential_drive::AnalogC &msg){
    
   //this method derives the control of the motors
   Speed spd;//the motors like in fakemotors
+  
+  // Distance of sensor 1 and 2.
+  double FrontRightSensor,RearRightSensor;
 
-  double d1,d2;
+  // Getting the info from the sensors.
+  FrontRightSensor = msg.ch8; // front sensor
+  RearRightSensor = msg.ch4; // back sensor
 
-  d1 = msg.ch8; // front sensor
-  d2 = msg.ch4; // back sensor
   //	msg.ch3;
   //	msg.ch4;
-  d1 = alpha_1/(d1+beta_1)-d1_0;
-  d2 = alpha_2/(d2+beta_2)-d2_0;
+
+  // Conversion from the ADC to cm.
+  FrontRightSensor = alpha_1/(FrontRightSensor+beta_1)-Sharp2Wheel_FrontRightD;
+  RearRightSensor = alpha_2/(RearRightSensor+beta_2)-Sharp2Wheel_RearRightD;
   
-  double x = 0;
-  double theta = 0;
-  theta = atan( (d1-d2)/(2*d) ); 
-  x = (d1+d2)*0.5*cos(theta);
-  double pi = atan(1)*4; // define pi
-  double w = K_x*(x-x_L)*(pi/2 - theta) + k_theta*theta*(exp(-abs(x-x_L) ) );
+  double Right_Center_WallD = 0;
+  double Robot2Wall_Angle = 0;
   
-  double v = V_0; 
+  Robot2Wall_Angle = -atan( (FrontRightSensor-RearRightSensor)/(IR_rightD) ); // changed to d.
+  Right_Center_WallD = (FrontRightSensor+RearRightSensor)*0.5*cos(Robot2Wall_Angle); // distance to the wall.
+
+double turn=1;//active theta-control if near wall only
+double forward=1;//active x-control if
+
+// If it is not near a wall, remove turning
+if (abs(Right_Center_WallD-Wheel2Wall_D)>10) {turn=0;}
+// While it is turning, dont go foward.
+if (Robot2Wall_Angle>0.2||-Robot2Wall_Angle>0.2) {forward=0;}
+
+double w = 1*K_x*(Right_Center_WallD-Wheel2Wall_D)*forward - 1*k_theta*Robot2Wall_Angle*turn;
+
+double v = 1*RobotSpeed;
  
+double w1=-1*(-w+v);//right wheel
+double w2=-1*(v+w); //left wheel
+
   // Debugg output
-  std::cerr<<d1<<' '<<d2<<' '<<std::endl;
+  std::cerr<<FrontRightSensor<<' '<<RearRightSensor<<' '<<w<<' '<<w1<<' '<<w2<<' '<<std::endl;
 
   // Publish into the speed topic.
-  spd.W1 = -1*(w+v);
-  spd.W2 = -1*(v-w);
+
+  spd.W1 = w1;
+  spd.W2 = w2;
   spd.header.stamp = ros::Time::now();
   cmd_pub.publish(spd);
 }
@@ -49,7 +67,7 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "controller");
     ros::NodeHandle nh;
     cmd_pub = nh.advertise<Speed>("/motion/Speed", 1);
-    //odom_sub = nh.subscribe("milestone0/object",1,followHand);//Christians node
+
     sharps_sub = nh.subscribe("/sensors/ADC/",1,followWall);
     
     ros::Rate loop_rate(100);
