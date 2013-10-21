@@ -23,9 +23,7 @@
 CMakeCache.txt
 CMakeFiles/
 bin/
-bin/**
 build/
-CMakeFiles/**
 Makefile
 cmake_install.cmake
 install_manifest.txt
@@ -34,7 +32,6 @@ install_manifest.txt
 #################
 .cproject
 .project
-.settings/**
 .settings/
 
 # Packages #
