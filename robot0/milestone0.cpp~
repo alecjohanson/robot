@@ -10,7 +10,7 @@ using namespace differential_drive;
 static ros::Publisher cmd_pub;
 static ros::Subscriber odom_sub;
 
-void followHand(const differential_drive::AnalogC &msg){
+void followHand(const geometry_msgs::Point &msg){
 //this method derives the control of the motors
 
     double x,z;
@@ -42,6 +42,7 @@ void followHand(const differential_drive::AnalogC &msg){
         spd.W2 = kr*(r-r0) + ka*alpha;
     }
     spd.header.stamp = ros::Time::now();
+    std::cerr<<spd.W1<<std::endl;
     cmd_pub.publish(spd);
 }
 
