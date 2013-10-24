@@ -42,9 +42,26 @@ CMAKE_BINARY_DIR = /home/robo/ros_workspace/robot/robot0
 # Include the progress variables for this target.
 include CMakeFiles/ROSBUILD_genmsg_cpp.dir/progress.make
 
-CMakeFiles/ROSBUILD_genmsg_cpp:
+CMakeFiles/ROSBUILD_genmsg_cpp: msg_gen/cpp/include/robot0/Distance.h
+
+msg_gen/cpp/include/robot0/Distance.h: msg/Distance.msg
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/roscpp/rosbuild/scripts/genmsg_cpp.py
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/roslib/bin/gendeps
+msg_gen/cpp/include/robot0/Distance.h: manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/roslang/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/roscpp/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/std_msgs/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/geometry_msgs/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/share/rospy/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /opt/ros/fuerte/stacks/vision_opencv/opencv2/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /home/robo/DD2425_2013/differential_drive/manifest.xml
+msg_gen/cpp/include/robot0/Distance.h: /home/robo/DD2425_2013/differential_drive/msg_gen/generated
+	$(CMAKE_COMMAND) -E cmake_progress_report /home/robo/ros_workspace/robot/robot0/CMakeFiles $(CMAKE_PROGRESS_1)
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold "Generating msg_gen/cpp/include/robot0/Distance.h"
+	/opt/ros/fuerte/share/roscpp/rosbuild/scripts/genmsg_cpp.py /home/robo/ros_workspace/robot/robot0/msg/Distance.msg
 
 ROSBUILD_genmsg_cpp: CMakeFiles/ROSBUILD_genmsg_cpp
+ROSBUILD_genmsg_cpp: msg_gen/cpp/include/robot0/Distance.h
 ROSBUILD_genmsg_cpp: CMakeFiles/ROSBUILD_genmsg_cpp.dir/build.make
 .PHONY : ROSBUILD_genmsg_cpp
 

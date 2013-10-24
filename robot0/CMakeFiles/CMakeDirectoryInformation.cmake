@@ -14,6 +14,7 @@ SET(CMAKE_C_INCLUDE_PATH
   "/opt/ros/fuerte/include"
   "/home/robo/DD2425_2013/differential_drive/msg_gen/cpp/include"
   "/opt/ros/fuerte/include/opencv"
+  "msg_gen/cpp/include"
   )
 SET(CMAKE_CXX_INCLUDE_PATH ${CMAKE_C_INCLUDE_PATH})
 SET(CMAKE_Fortran_INCLUDE_PATH ${CMAKE_C_INCLUDE_PATH})

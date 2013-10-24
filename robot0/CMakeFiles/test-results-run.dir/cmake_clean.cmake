@@ -1,4 +1,7 @@
 FILE(REMOVE_RECURSE
+  "msg_gen"
+  "src/robot0/msg"
+  "msg_gen"
   "CMakeFiles/test-results-run"
 )
 

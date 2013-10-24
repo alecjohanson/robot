@@ -1,5 +1,11 @@
 FILE(REMOVE_RECURSE
+  "msg_gen"
+  "src/robot0/msg"
+  "msg_gen"
   "CMakeFiles/ROSBUILD_genmsg_lisp"
+  "msg_gen/lisp/Distance.lisp"
+  "msg_gen/lisp/_package.lisp"
+  "msg_gen/lisp/_package_Distance.lisp"
 )
 
 # Per-language clean rules from dependency scanning.

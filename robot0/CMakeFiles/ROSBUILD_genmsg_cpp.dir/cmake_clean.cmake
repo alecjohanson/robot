@@ -1,5 +1,9 @@
 FILE(REMOVE_RECURSE
+  "msg_gen"
+  "src/robot0/msg"
+  "msg_gen"
   "CMakeFiles/ROSBUILD_genmsg_cpp"
+  "msg_gen/cpp/include/robot0/Distance.h"
 )
 
 # Per-language clean rules from dependency scanning.
