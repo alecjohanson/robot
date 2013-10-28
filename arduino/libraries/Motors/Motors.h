@@ -11,8 +11,8 @@
 class Motors{
 
 public:
-int _k ;
-int _ki ;
+float _k ;
+float _ki ;
 int _int_max ;
 char _dir_pin ;
 char _pwm_pin ;
@@ -84,7 +84,7 @@ float Read_speed(int encoder, int encoder_old, float Te);
  * 		@ int INT_MAX :	 		integral saturation value
  * 		@ int ticks_per_rev :	Encoders ticks per revolution
  */
-int Set_control_parameters(int K, int KI, int INT_MAX,int ticks_per_rev);
+int Set_control_parameters(float K, float KI, int i_max,int ticks_per_rev);
 
 int Reset();
 

@@ -31,6 +31,7 @@
 #include <differential_drive/Encoders.h>
 #include <differential_drive/AnalogC.h>
 #include <differential_drive/Params.h>
+#include <differential_drive/PWM.h>
 #include <differential_drive/Servomotors.h>
 #include <std_msgs/Header.h>
 
@@ -78,30 +79,28 @@ Servo servo[8];
 char servo_pin[] = {22,24,26,28,30,32,34,36};
 
 /* Lot of global variables (nasty) */
-float W1_cons = 0;
-float W2_cons = 0;
+static float W1_cons = 0;
+static float W2_cons = 0;
 
-float r = 38.9E-3 ;
-float B = 0.1867 ;
-float r_r = 0.5*0.0777;
-float r_l = 0.5*0.0779;
+static float r = 38.9E-3 ;
+static float B = 0.1867 ;
+static float r_r = 0.5*0.0777;
+static float r_l = 0.5*0.0779;
 
-float Te = 10*1E-3 ;
+//float Te = 10e-3 ;
 
-float V_lin = 0;
-float V_rot = 0;
+//float V_lin = 0;
+//float V_rot = 0;
 
-float x=0;
-float y=0;
-float theta=0;
+static float x=0;
+static float y=0;
+static float theta=0;
 
-int encoder1, encoder1_old ;
-int encoder1_loc,encoder2_loc ;
-int encoder2, encoder2_old ;
+volatile static int16_t encoder1, encoder2;
 
-unsigned long time,time_old;
-unsigned long t_enc, t_enc_old;
-unsigned long wdtime ;
+static unsigned long time,time_old;
+static unsigned long t_enc, t_enc_old;
+volatile static unsigned long wdtime ;
 
 int cpt = 0;
 
@@ -134,6 +133,7 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
   static int i = 0;
   static float array1[N],array2[N];
   static float loc1=0,loc2=0;
+  float Te;
   wdtime = millis() ;  // store the time for Watchdog
   /* get the time from message header */
   time_old = time ;  
@@ -150,11 +150,12 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
   W2_cons = cmd_msg.W2 ;
   
   /* Control loop */
-  encoder1_loc = encoder1 ;
-  encoder2_loc = encoder2 ;
+  static int16_t encoder1_old=0, encoder2_old=0;
+  int16_t encoder1_loc = encoder1;
+  int16_t encoder2_loc = encoder2;
 
-  imlost.encoder1 = encoder1;
-  imlost.encoder2 = encoder2;
+  imlost.encoder1 = encoder1_loc;
+  imlost.encoder2 = encoder2_loc;
   imlost.delta_encoder1 = encoder1_loc-encoder1_old ;
   imlost.delta_encoder2 = encoder2_loc-encoder2_old ;
   
@@ -169,8 +170,8 @@ void messageSpeed( const differential_drive::Speed& cmd_msg){
   MotorB.Read_speed(encoder2_loc,encoder2_old,Te);
   
   /* Compute odometry */
-  V_lin = 1.0/2*(r_r*MotorA._speed-r_l*MotorB._speed);
-  V_rot = 1.0/B*(r_r*MotorA._speed+r_l*MotorB._speed);
+  float V_lin = 1.0/2*(r_r*MotorA._speed-r_l*MotorB._speed);
+  float V_rot = 1.0/B*(r_r*MotorA._speed+r_l*MotorB._speed);
   
   // Speed averaging
   array1[i]=V_lin;
@@ -261,6 +262,12 @@ void messageServo(const differential_drive::Servomotors& params)  {
   }
 }
 
+void messagePWM(const differential_drive::PWM& pwm) {
+  wdtime=millis();
+  MotorA.Set_speed(pwm.PWM1);
+  MotorB.Set_speed(pwm.PWM2);
+}
+
 /* Create Subscriber to "/motion/Speed" topic. Callback function is messageSpeed */
 ros::Subscriber<differential_drive::Speed> subSpeed("/motion/Speed", &messageSpeed);
 
@@ -269,6 +276,9 @@ ros::Subscriber<differential_drive::Servomotors> subServo("/actuator/Servo", &me
 
 /* Create Subscriber to "/motion/Parameters" topic. Callback function is messageParameters */
 ros::Subscriber<differential_drive::Params> subParam("/motion/Parameters", &messageParameters);
+
+/* Create Subscriber to "/motion/PWM" topic. Callback function is messagePWM */
+ros::Subscriber<differential_drive::PWM> subPWM("/motion/PWM", &messagePWM);
 
 void hello_world()  {
   for(int m=0;m<6;m++)  {
@@ -294,8 +304,8 @@ void setup()  {
          MotorB.Set_speed(0);
          
          /* Set the good parameters */
-         MotorA.Set_control_parameters(5, 0, 3, 1000);
-         MotorB.Set_control_parameters(5, 0, 3, 1000);
+         MotorA.Set_control_parameters(5.0, 0.0, 3, 1000);
+         MotorB.Set_control_parameters(5.0, 0.0, 3, 1000);
          
          /* Define interruptions, on changing edge */
          attachInterrupt(3,interrupt1,CHANGE);  // A
@@ -326,6 +336,7 @@ void setup()  {
          nh.subscribe(subSpeed);  // Subscribe 
          nh.subscribe(subServo);  // Subscribe 
          nh.subscribe(subParam);  // Subscribe 
+         nh.subscribe(subPWM);  // Subscribe 
          
          /* Advertise booting */
          hello_world();
@@ -340,7 +351,7 @@ void setup()  {
 /*****************************
 * Main Loop 
 *
-* Watchdog timer : if no message recieved during 2s, set the motors in stby,
+* Watchdog timer : if no message received during 2s, set the motors in stby,
 * computer may have crashed.
 ******************************/
 void loop()  {

@@ -73,7 +73,7 @@ int Motors::Set_speed(int u)	{
  */
 
 int Motors::Speed_regulation(float W, float Te, int encoder, int encoder_old) {
-	float u ;
+	int u ;
 	_speed_instruction = W ;	
 	Read_speed(encoder, encoder_old, Te);
 	_error = _speed_instruction - _speed;
@@ -107,7 +107,7 @@ int Motors::Speed_regulation(float W, float Te, int encoder, int encoder_old) {
 float Motors::Read_speed(int encoder, int encoder_old, float Te)	{
 	int dp;
 	dp = encoder - encoder_old ;
-	_speed = dp*2.*M_PI/1000./Te;
+	_speed = dp*2.*M_PI/(_ticks_per_rev*Te);
 	return _speed;
 }
 
@@ -130,10 +130,10 @@ float Motors::Read_current() {
  * 		@ int INT_MAX :	 		integral saturation value
  * 		@ int ticks_per_rev :	Encoders ticks per revolution
  */
-int Motors::Set_control_parameters(int K, int KI, int INT_MAX, int ticks_per_rev) {
+int Motors::Set_control_parameters(float K, float KI, int i_max, int ticks_per_rev) {
 	_k = K ;
 	_ki = KI ;
-	_int_max = INT_MAX ;
+	_int_max = i_max ;
 	_ticks_per_rev = ticks_per_rev ;
 return 0;
 }

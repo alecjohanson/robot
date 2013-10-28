@@ -12,8 +12,8 @@ namespace differential_drive
   class Params : public ros::Msg
   {
     public:
-      uint16_t K;
-      uint16_t KI;
+      float K;
+      float KI;
       uint16_t INT_MAX;
       uint16_t ticks;
       float r;
@@ -24,11 +24,25 @@ namespace differential_drive
     virtual int serialize(unsigned char *outbuffer) const
     {
       int offset = 0;
-      *(outbuffer + offset + 0) = (this->K >> (8 * 0)) & 0xFF;
-      *(outbuffer + offset + 1) = (this->K >> (8 * 1)) & 0xFF;
+      union {
+        float real;
+        uint32_t base;
+      } u_K;
+      u_K.real = this->K;
+      *(outbuffer + offset + 0) = (u_K.base >> (8 * 0)) & 0xFF;
+      *(outbuffer + offset + 1) = (u_K.base >> (8 * 1)) & 0xFF;
+      *(outbuffer + offset + 2) = (u_K.base >> (8 * 2)) & 0xFF;
+      *(outbuffer + offset + 3) = (u_K.base >> (8 * 3)) & 0xFF;
       offset += sizeof(this->K);
-      *(outbuffer + offset + 0) = (this->KI >> (8 * 0)) & 0xFF;
-      *(outbuffer + offset + 1) = (this->KI >> (8 * 1)) & 0xFF;
+      union {
+        float real;
+        uint32_t base;
+      } u_KI;
+      u_KI.real = this->KI;
+      *(outbuffer + offset + 0) = (u_KI.base >> (8 * 0)) & 0xFF;
+      *(outbuffer + offset + 1) = (u_KI.base >> (8 * 1)) & 0xFF;
+      *(outbuffer + offset + 2) = (u_KI.base >> (8 * 2)) & 0xFF;
+      *(outbuffer + offset + 3) = (u_KI.base >> (8 * 3)) & 0xFF;
       offset += sizeof(this->KI);
       *(outbuffer + offset + 0) = (this->INT_MAX >> (8 * 0)) & 0xFF;
       *(outbuffer + offset + 1) = (this->INT_MAX >> (8 * 1)) & 0xFF;
@@ -82,11 +96,27 @@ namespace differential_drive
     virtual int deserialize(unsigned char *inbuffer)
     {
       int offset = 0;
-      this->K =  ((uint16_t) (*(inbuffer + offset)));
-      this->K |= ((uint16_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      union {
+        float real;
+        uint32_t base;
+      } u_K;
+      u_K.base = 0;
+      u_K.base |= ((uint32_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      u_K.base |= ((uint32_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      u_K.base |= ((uint32_t) (*(inbuffer + offset + 2))) << (8 * 2);
+      u_K.base |= ((uint32_t) (*(inbuffer + offset + 3))) << (8 * 3);
+      this->K = u_K.real;
       offset += sizeof(this->K);
-      this->KI =  ((uint16_t) (*(inbuffer + offset)));
-      this->KI |= ((uint16_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      union {
+        float real;
+        uint32_t base;
+      } u_KI;
+      u_KI.base = 0;
+      u_KI.base |= ((uint32_t) (*(inbuffer + offset + 0))) << (8 * 0);
+      u_KI.base |= ((uint32_t) (*(inbuffer + offset + 1))) << (8 * 1);
+      u_KI.base |= ((uint32_t) (*(inbuffer + offset + 2))) << (8 * 2);
+      u_KI.base |= ((uint32_t) (*(inbuffer + offset + 3))) << (8 * 3);
+      this->KI = u_KI.real;
       offset += sizeof(this->KI);
       this->INT_MAX =  ((uint16_t) (*(inbuffer + offset)));
       this->INT_MAX |= ((uint16_t) (*(inbuffer + offset + 1))) << (8 * 1);
@@ -142,7 +172,7 @@ namespace differential_drive
     }
 
     const char * getType(){ return "differential_drive/Params"; };
-    const char * getMD5(){ return "8950f824993d2867219a00186d4620f7"; };
+    const char * getMD5(){ return "23c322c43b708c26d995c15cbe0a822e"; };
 
   };
 

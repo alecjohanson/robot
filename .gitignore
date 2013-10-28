@@ -17,6 +17,7 @@
 *.la
 *.lib
 *.a
+*.pyc
 
 # CMake stuff #
 ###############
