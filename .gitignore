@@ -34,6 +34,15 @@ install_manifest.txt
 .project
 .settings/
 
+# ros generated #
+#################
+msg_gen/
+srv_gen/
+
+# vim stuff #
+#############
+.*.swp
+
 # Packages #
 ############
 # it's better to unpack these files and commit the raw source
