@@ -39,14 +39,10 @@
 #include <differential_drive/PWM.h>
 #include <differential_drive/Servomotors.h>
 #include <std_msgs/Header.h>
-
-#include <stdint.h>
-
 #include <Motors.h>
-#include <math.h>
-
 #include <Servo.h>
-
+#include <stdint.h>
+#include <math.h>
 //#include <music.h>
 
 /* PinOut definition */
@@ -66,21 +62,27 @@
 #define EXTINT(n) CONCAT3(INT,n,_vect)
 #define PIN(c) CONCAT(PIN,c)
 
+//Wheel encoders
 #define ENC1_PORT D
-#define ENC1_PHASE1 1 //Arduino digital pin 20
-#define ENC1_PHASE2 0 //Arduino digital pin 21
-
+#define ENC1_PHASE1 1 ///<Arduino digital pin 20
+#define ENC1_PHASE2 0 ///<Arduino digital pin 21
 #define ENC2_PORT D
-#define ENC2_PHASE1 3 //Arduino digital pin 18
-#define ENC2_PHASE2 2 //Arduino digital pin 19
+#define ENC2_PHASE1 3 ///<Arduino digital pin 18
+#define ENC2_PHASE2 2 ///<Arduino digital pin 19
 
-#define TIMER_PERIOD_MS 50
+//Timing constants
+#define PERIOD_TIMER_MS 50
+#define PERIOD_WATCHDOG_MS 2000
+#define PERIOD_ADC_MS 80 ///< IR sensors have a measurement period of 40.
+#define PERIOD_BATT_MS 2000
 
 #define N 10 // Averaging of measured speed with the N last values
 
 /* Battery monitoring const */
 #define seuil_cell 3.6
 #define seuil_batt 10.8
+
+volatile static uint16_t adcvals[16];
 
 int led_pin[6] = {38,40,42,44,46,48};
 
@@ -98,7 +100,7 @@ volatile static float W1_set;
 /// Set speed value for motor 2
 volatile static float W2_set;
 /// timer period of encoder measurements and PI control
-static const float Te=TIMER_PERIOD_MS*1e-3;
+static const float Te=PERIOD_TIMER_MS*1e-3;
 /// Wheel base of the robot
 static float B = 0.1867 ;
 /// Radius of the right wheel
@@ -116,6 +118,7 @@ volatile static unsigned long wdtime;
 
 volatile static uint8_t flags;
 #define FLAG_ENCUPDATE (1<<0)
+#define FLAG_ADCRESULT (1<<1)
 #define FLAG_PWMDIRECT (1<<7)
 
 static void messageSpeed( const differential_drive::Speed& cmd_msg);
@@ -138,15 +141,16 @@ ros::Subscriber<differential_drive::Params> subParam("/motion/Parameters", &mess
 ros::Subscriber<differential_drive::PWM> subPWM("/motion/PWM", &messagePWM);
 
 void setup()  {
-
 	/* Set the motors in stby */
 	MotorA.Set_speed(0);
 	MotorB.Set_speed(0);
+	flags|=FLAG_PWMDIRECT;
 
 	/* Set the good parameters */
 	MotorA.Set_control_parameters(5.0, 0.0, 3, 1000);
 	MotorB.Set_control_parameters(5.0, 0.0, 3, 1000);
 
+	//configure external interrupts
 	EICRA=0x55;  //set interrupts 0..3 to trigger on both edges
 	EIMSK|=0x0f; //activate interrupts 0..3
 
@@ -157,18 +161,18 @@ void setup()  {
 	pinMode(7,OUTPUT);
 
 	TIMSK4=_BV(ICIE4); //enable timer 4 interrupt
-	ICR4=(F_CPU/1000L/64L*TIMER_PERIOD_MS)-1; //set timer 4 period
+	ICR4=(F_CPU/1000L/64L*PERIOD_TIMER_MS)-1; //set timer 4 period
 	//configure timer 4 for CTC mode, prescaler=64
 	TCCR4A=0;
 	TCCR4B=_BV(WGM43)|_BV(WGM42)|3;
 
-	/* Configure servomotors pins */
+	// Configure servo motor pins
 	for(int i=0;i<8;i++) {
 		servo[i].attach(servo_pin[i]);
 
 	}
 
-	/* Initialize ROS stuff */
+	// Initialize ROS stuff
 	nh.initNode();  // initialize node
 
 	nh.advertise(pubEnc);  // advertise on pubEnc
@@ -194,14 +198,32 @@ void loop()  {
 	static unsigned long t_ADC;
 	static boolean low_batt = false ;
 	nh.spinOnce();
-	/*
+	unsigned long t=millis();
+
 	// Watchdog timer
-	if(millis()-wdtime > 2000)  {
+	if(t-wdtime >= PERIOD_WATCHDOG_MS)  {
+		cli();
 		MotorA.Set_speed(0);
 		MotorB.Set_speed(0);
-		wdtime = millis();
+		flags|=FLAG_PWMDIRECT;
+		sei();
+		wdtime += PERIOD_WATCHDOG_MS;
 	}
-	*/
+
+	//trigger measurement of ADC values
+	if(t-t_ADC>PERIOD_ADC_MS && !(ADCSRA&_BV(ADSC))) {
+		//the battery values are included less often
+		if(t-t_bat > PERIOD_BATT_MS) {
+			ADMUX=_BV(REFS0)|5;
+			ADCSRB=0;
+			t_bat += PERIOD_BATT_MS;
+		} else {
+			ADMUX=_BV(REFS0);
+			ADCSRB=_BV(MUX5);
+		}
+		ADCSRA=_BV(ADEN)|_BV(ADSC)|_BV(ADIE)|3;
+		t_ADC += PERIOD_ADC_MS;
+	}
 
 	if(flags&FLAG_ENCUPDATE) {
 		flags&=~FLAG_ENCUPDATE;
@@ -209,61 +231,39 @@ void loop()  {
 		updateOdometry();
 	}
 
-
-	/* Read IR sensors value every 100ms */
-	if(millis()-t_ADC>100)
-	{
-		amsg.ch1 = analogRead(A8);
-		amsg.ch2 = analogRead(A9);
-		amsg.ch3 = analogRead(A10);
-		amsg.ch4 = analogRead(A11);
-		amsg.ch5 = analogRead(A12);
-		amsg.ch6 = analogRead(A13);
-		amsg.ch7 = analogRead(A14);
-		amsg.ch8 = analogRead(A15);
-
-		/* Publish sensor value */
-		sensor.publish(&amsg);
-		t_ADC = millis();
-	}
-
-	if(millis()-t_bat > 1000)  {
-		float v1 = analogRead(A7)*0.0049*1.5106;
-		float v2 = analogRead(A6)*0.0049*2.9583;
-		float v3 = analogRead(A5)*0.0049*2.9583;
-
+	if(flags&FLAG_ADCRESULT) {
+		amsg.ch1 = adcvals[8];
+		amsg.ch2 = adcvals[9];
+		amsg.ch3 = adcvals[10];
+		amsg.ch4 = adcvals[11];
+		amsg.ch5 = adcvals[12];
+		amsg.ch6 = adcvals[13];
+		amsg.ch7 = adcvals[14];
+		amsg.ch8 = adcvals[15];
+		float v1 = adcvals[7]*0.0049*1.5106;
+		float v2 = adcvals[6]*0.0049*2.9583;
+		float v3 = adcvals[5]*0.0049*2.9583;
 		amsg.cell1 = v1;
 		amsg.cell2 = v2 - v1;
 		amsg.cell3 = v3 - v2;
 		amsg.on_batt = digitalRead(10);
-
-		for(int m=0;m<floor((v3-seuil_batt)*4);m++)  {
+		for(int m=0;m<floor((v3-seuil_batt)*4);m++)
 			digitalWrite(led_pin[m],HIGH);
-		}
-		for(int m=floor((v3-seuil_batt)*4);m<6;m++)  {
+		for(int m=floor((v3-seuil_batt)*4);m<6;m++)
 			digitalWrite(led_pin[m],LOW);
-		}
-
-		if((amsg.cell1<seuil_cell || amsg.cell2<seuil_cell || amsg.cell3<seuil_cell) && v1>2)  {
+		if((amsg.cell1<seuil_cell || amsg.cell2<seuil_cell || amsg.cell3<seuil_cell) && v1>2)
 			low_batt = true ;
-		}
-
-		if(low_batt && ((amsg.cell1>seuil_cell+0.2 || amsg.cell2>seuil_cell+0.2 || amsg.cell3>seuil_cell+0.2) || v1<2))  {
+		if(low_batt && ((amsg.cell1>seuil_cell+0.2 || amsg.cell2>seuil_cell+0.2 || amsg.cell3>seuil_cell+0.2) || v1<2))
 			low_batt = false;
-		}
-
-		if(low_batt)  {
-			tone(7,440,500);
-		}
-
-		t_bat = millis();
+		if(low_batt) tone(7,440,500);
+		sensor.publish(&amsg);
 	}
 }
 
 /* Subscriber Callback */
 static void messageSpeed( const differential_drive::Speed& cmd_msg) {
 	cli();
-	/* get the speed from message */
+	// get the speed from message
 	W1_set = cmd_msg.W1;
 	W2_set = cmd_msg.W2;
 	wdtime = millis() ;  // store the time for Watchdog
@@ -283,9 +283,8 @@ static void messageParameters(const differential_drive::Params& params) {
 
 static void messageServo(const differential_drive::Servomotors& params) {
 	cli();
-	for(int i=0;i<8;i++) {
+	for(int i=0;i<8;i++)
 		servo[i].write(params.servoangle[i]);
-	}
 	sei();
 }
 
@@ -323,33 +322,12 @@ static void updateOdometry(void) {
 	if(cpt<10)  {cpt++;}
 	else  {
 		cpt = 0;
-
-		/* Publish Odometry */
+		// Publish Odometry
 		odomsg.x = x ;
 		odomsg.y = y;
 		odomsg.theta = theta ;
-
-		/* Publish Odometry and sensors value */
 		pubOdom.publish(&odomsg);
 	}
-}
-
-ISR(TIMER4_CAPT_vect) {
-	//read encoder value
-	int16_t encoder1_loc = encoder1;
-	int16_t encoder2_loc = encoder2;
-	encmsg.delta_encoder1 = encoder1_loc-encmsg.encoder1;
-	encmsg.delta_encoder2 = encoder2_loc-encmsg.encoder2;
-	encmsg.encoder1 = encoder1_loc;
-	encmsg.encoder2 = encoder2_loc;
-	uint8_t f=flags;
-	if(!(f&FLAG_PWMDIRECT)) {
-		MotorA.Speed_regulation(W1_set,Te,encmsg.delta_encoder1);
-		MotorB.Speed_regulation(-W2_set,Te,encmsg.delta_encoder2);
-	}
-	encmsg.timestamp = TIMER_PERIOD_MS*1e-3;
-	f|=FLAG_ENCUPDATE;
-	flags=f;
 }
 
 ISR(EXTINT(ENC1_PHASE1)) {
@@ -394,4 +372,36 @@ ISR(EXTINT(ENC2_PHASE2)) {
 		if(pin&(uint8_t)_BV(ENC2_PHASE2)) --encoder2;
 		else ++encoder2;
 	}
+}
+
+ISR(ADC_vect) {
+	uint8_t i=ADMUX&0x1f;
+	if(ADCSRB&_BV(MUX5)) i+=8;
+	adcvals[i]=ADC;
+	if(i<15) {
+		++i;
+		ADMUX=_BV(REFS0)|(i&0x07);
+		ADCSRB=(i>7)?_BV(MUX5):0;
+		ADCSRA=_BV(ADEN)|_BV(ADSC)|_BV(ADIE)|3;
+	} else {
+		flags|=FLAG_ADCRESULT;
+	}
+}
+
+ISR(TIMER4_CAPT_vect) {
+	//read encoder value
+	int16_t encoder1_loc = encoder1;
+	int16_t encoder2_loc = encoder2;
+	encmsg.delta_encoder1 = encoder1_loc-encmsg.encoder1;
+	encmsg.delta_encoder2 = encoder2_loc-encmsg.encoder2;
+	encmsg.encoder1 = encoder1_loc;
+	encmsg.encoder2 = encoder2_loc;
+	uint8_t f=flags;
+	if(!(f&FLAG_PWMDIRECT)) {
+		MotorA.Speed_regulation(W1_set,Te,encmsg.delta_encoder1);
+		MotorB.Speed_regulation(-W2_set,Te,encmsg.delta_encoder2);
+	}
+	encmsg.timestamp = PERIOD_TIMER_MS*1e-3;
+	f|=FLAG_ENCUPDATE;
+	flags=f;
 }
