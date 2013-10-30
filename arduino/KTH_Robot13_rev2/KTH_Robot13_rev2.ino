@@ -64,11 +64,11 @@
 
 //Wheel encoders
 #define ENC1_PORT D
-#define ENC1_PHASE1 1 ///<Arduino digital pin 20
-#define ENC1_PHASE2 0 ///<Arduino digital pin 21
+#define ENC1_PHASE1 0 ///<Arduino digital pin 20
+#define ENC1_PHASE2 1 ///<Arduino digital pin 21
 #define ENC2_PORT D
-#define ENC2_PHASE1 3 ///<Arduino digital pin 18
-#define ENC2_PHASE2 2 ///<Arduino digital pin 19
+#define ENC2_PHASE1 2 ///<Arduino digital pin 18
+#define ENC2_PHASE2 3 ///<Arduino digital pin 19
 
 //Timing constants
 #define PERIOD_TIMER_MS 50
@@ -102,11 +102,11 @@ volatile static float W2_set;
 /// timer period of encoder measurements and PI control
 static const float Te=PERIOD_TIMER_MS*1e-3;
 /// Wheel base of the robot
-static float B = 0.1867 ;
+static float B = 208.8e-3;
 /// Radius of the right wheel
-static float r_r = 0.5*0.0777;
+static float r_r = 0.5*99.8e-3;
 /// Radius of the left wheel
-static float r_l = 0.5*0.0779;
+static float r_l = 0.5*99.8e-3;
 
 static float x;
 static float y;
@@ -146,9 +146,11 @@ void setup()  {
 	MotorB.Set_speed(0);
 	flags|=FLAG_PWMDIRECT;
 
-	/* Set the good parameters */
-	MotorA.Set_control_parameters(5.0, 0.0, 3, 1000);
-	MotorB.Set_control_parameters(5.0, 0.0, 3, 1000);
+	//todo: These values need some more adjustment.
+	MotorA.Set_control_parameters(12.0, 5.0, 30, 1000);
+	MotorA.Set_nlin_parameters(0.64,56.0);
+	MotorB.Set_control_parameters(12.0, 5.0, 30, 1000);
+	MotorB.Set_nlin_parameters(0.64,62.0);
 
 	//configure external interrupts
 	EICRA=0x55;  //set interrupts 0..3 to trigger on both edges
@@ -232,6 +234,7 @@ void loop()  {
 	}
 
 	if(flags&FLAG_ADCRESULT) {
+		flags&=~FLAG_ADCRESULT;
 		amsg.ch1 = adcvals[8];
 		amsg.ch2 = adcvals[9];
 		amsg.ch3 = adcvals[10];
@@ -392,14 +395,14 @@ ISR(TIMER4_CAPT_vect) {
 	//read encoder value
 	int16_t encoder1_loc = encoder1;
 	int16_t encoder2_loc = encoder2;
-	encmsg.delta_encoder1 = encoder1_loc-encmsg.encoder1;
-	encmsg.delta_encoder2 = encoder2_loc-encmsg.encoder2;
+	encmsg.delta_encoder1 = (int16_t)(encoder1_loc-(int16_t)encmsg.encoder1);
+	encmsg.delta_encoder2 = (int16_t)(encoder2_loc-(int16_t)encmsg.encoder2);
 	encmsg.encoder1 = encoder1_loc;
 	encmsg.encoder2 = encoder2_loc;
 	uint8_t f=flags;
 	if(!(f&FLAG_PWMDIRECT)) {
 		MotorA.Speed_regulation(W1_set,Te,encmsg.delta_encoder1);
-		MotorB.Speed_regulation(-W2_set,Te,encmsg.delta_encoder2);
+		MotorB.Speed_regulation(W2_set,Te,encmsg.delta_encoder2);
 	}
 	encmsg.timestamp = PERIOD_TIMER_MS*1e-3;
 	f|=FLAG_ENCUPDATE;

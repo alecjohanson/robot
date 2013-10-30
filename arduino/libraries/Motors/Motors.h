@@ -31,6 +31,8 @@ float _speed ;
 float _error ;
 float _int;
 
+float _nlin_slope, _nlin_intercept;
+
 Motors(char dir_pin,char pwm_pin,char brk_pin,char cfb_pin);
 ~Motors(void);
 
@@ -74,6 +76,8 @@ float Read_current();
  * 		@ int ticks_per_rev :	Encoders ticks per revolution
  */
 void Set_control_parameters(float K, float KI, int i_max,int ticks_per_rev);
+
+void Set_nlin_parameters(float nlin_slope,float nlin_intercept);
 
 void Reset();
 

@@ -71,7 +71,6 @@ void Motors::Set_speed(int u)	{
  * 		@ int16_t deltaStep : 	 encoder difference
  */
 void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
-	int u ;
 	_speed = deltaStep*2.*M_PI/(_ticks_per_rev*Te);
 	_error = W - _speed;
 	_int+= _error*Te;
@@ -79,16 +78,18 @@ void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
 	if(_int>_int_max) {_int = _int_max;}
 	else if(_int<-_int_max)  {_int = -_int_max;}
 
-	u = _k*_error+_ki*_int;
+	float ctrlOut = _k*_error+_ki*_int;
 
-	//Threshold
-	if(u>5)	{u+=35;}
-	else if(u<-5)	{u-=35;}
+	int pwm;
+	if(abs(W)<0.01) pwm=0;
+	else if(signbit(ctrlOut)==signbit(W)) pwm=_nlin_intercept+ctrlOut*ctrlOut*_nlin_slope;
+	else pwm=_nlin_intercept-abs(ctrlOut);
+	if(pwm > 255) pwm = 255;
+	if(pwm<0) pwm=0;
 
-	if(u > 255) {u = 255;}
-	else if(u < -255)  {u = -255;}
-
-	Set_speed(u);
+	if(W<0.0) digitalWrite(_dir_pin, LOW);
+	else digitalWrite(_dir_pin, HIGH);
+	analogWrite(_pwm_pin,pwm);
 }
 
 /*
@@ -110,10 +111,16 @@ float Motors::Read_current() {
  * 		@ int ticks_per_rev :	Encoders ticks per revolution
  */
 void Motors::Set_control_parameters(float K, float KI, int i_max, int ticks_per_rev) {
-	_k = K ;
-	_ki = KI ;
-	_int_max = i_max ;
-	_ticks_per_rev = ticks_per_rev ;
+	_k = K;
+	_ki = KI;
+	_int_max = i_max;
+	_ticks_per_rev = ticks_per_rev;
+	return;
+}
+
+void Motors::Set_nlin_parameters(float nlin_slope,float nlin_intercept) {
+	_nlin_slope=nlin_slope;
+	_nlin_intercept=nlin_intercept;
 	return;
 }
 
