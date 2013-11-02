@@ -1,0 +1,18 @@
+<package>
+  <description brief="sharps">
+
+     sharps
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/sharps</url>
+  <depend package="std_msgs"/>
+  <depend package="rospy"/>
+  <depend package="roscpp"/>
+  <depend package="differential_drive"/>
+
+</package>
+
+
