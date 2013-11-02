@@ -17,6 +17,7 @@
 *.la
 *.lib
 *.a
+*.pyc
 
 # CMake stuff #
 ###############
@@ -34,6 +35,15 @@ __init__.py
 .cproject
 .project
 .settings/
+
+# ros generated #
+#################
+msg_gen/
+srv_gen/
+
+# vim stuff #
+#############
+.*.swp
 
 # Packages #
 ############
