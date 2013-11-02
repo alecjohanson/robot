@@ -1,0 +1,29 @@
+<robot name="robot0">
+	<link name="base_link">
+		<visual>
+			<geometry>
+				<box size="0.24 0.24 0.06" />
+				<cylinder radius="0.20" length="0.0014" />
+			</geometry>
+			<material name="Aluminium">
+				<color rgba="0.75 0.75 0.75 1.0" />
+			</material>
+		</visual>
+	</link>
+	<link name="neck_link">
+		<visual>
+			<geometry>
+				<box size="0.02 0.04 0.15" />
+			</geometry>
+			<material name="Aluminium">
+				<color rgba="0.75 0.75 0.75 1.0" />
+			</material>
+		</visual>
+	</link>
+	<joint name="neck_joint" type="fixed">
+		<parent link="base_link" />
+		<child link="neck_link" />
+		<origin xyz="0 0 0.06" rpy="0 0 0" />
+		<axis xyz="0 1 0" />
+	</joint>
+</robot>

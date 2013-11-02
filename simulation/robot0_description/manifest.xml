@@ -1,0 +1,15 @@
+<package>
+  <description brief="robot0_description">
+
+     robot0_description
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/robot0_description</url>
+  <depend package="urdf"/>
+
+</package>
+
+
