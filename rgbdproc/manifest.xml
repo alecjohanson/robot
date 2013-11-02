@@ -1,0 +1,16 @@
+<package>
+  <description brief="rgbdproc">
+
+     rgbdproc
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/rgbdproc</url>
+  <depend package="roslib"/>
+  <depend package="roscpp"/>
+
+</package>
+
+
