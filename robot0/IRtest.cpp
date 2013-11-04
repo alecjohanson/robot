@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include <differential_drive/AnalogC.h>
+#include <sharps/Distance.h>
 #include <differential_drive/Speed.h>
 #include "IRtest.h"
 #include <cmath>
@@ -11,7 +11,7 @@ using namespace differential_drive;
 static ros::Publisher cmd_pub;
 static ros::Subscriber sharps_sub;
 
-void followWall(const differential_drive::AnalogC &msg){
+void followWall(const sharps::Distance &msg){
    
   //this method derives the control of the motors
   Speed spd;//the motors like in fakemotors
@@ -20,16 +20,12 @@ void followWall(const differential_drive::AnalogC &msg){
   double FrontRightSensor,RearRightSensor;
 
   // Getting the info from the sensors.
-  FrontRightSensor = msg.ch8; // front sensor
-  RearRightSensor = msg.ch4; // back sensor
+  FrontRightSensor = msg.front_r; // front sensor
+  RearRightSensor = msg.rear_r; // back sensor
 
   //	msg.ch3;
   //	msg.ch4;
-
-  // Conversion from the ADC to cm.
-  FrontRightSensor = alpha_1/(FrontRightSensor+beta_1)-Sharp2Wheel_FrontRightD;
-  RearRightSensor = alpha_2/(RearRightSensor+beta_2)-Sharp2Wheel_RearRightD;
-  
+ 
   double Right_Center_WallD = 0;
   double Robot2Wall_Angle = 0;
   
@@ -134,7 +130,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
     cmd_pub = nh.advertise<Speed>("/motion/Speed", 1);
 
-    sharps_sub = nh.subscribe("/sensors/ADC/",1,followWall);
+    sharps_sub = nh.subscribe("/sharps/Distance/",1,followWall);
     
     ros::Rate loop_rate(100);
 
