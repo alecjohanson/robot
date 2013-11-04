@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 #include <differential_drive/AnalogC.h>
-#include <differential_drive/Sharp.h>
+#include <robot0/Distance.h>
 #include "SensorPublisher.h"
 #include <iostream>
 
@@ -11,7 +11,7 @@ static ros::Subscriber arduino_sub;
 
 void getDistance(const differential_drive::AnalogC &msg){
    
-  differential_drive::Sharp dst;
+  robot0::Distance dst;
 
   double RearRightSensor,FrontRightSensor;
   double RearLeftSensor, FrontLeftSensor;
@@ -26,8 +26,8 @@ void getDistance(const differential_drive::AnalogC &msg){
   FrontLeftSensor = msg.ch7;
 
   // Getting the info from the Front and Rear.
-  RearSensor = msg.ch2;
-  FrontSensor = msg.ch3;
+  RearSensor = msg.ch3;
+  FrontSensor = msg.ch2;
 
   // Conversion from the ADC to cm.
   FrontRightSensor = alpha_1/(FrontRightSensor+beta_1)-Sharp2Wheel_FrontRightD;
@@ -39,13 +39,14 @@ void getDistance(const differential_drive::AnalogC &msg){
   RearSensor = alpha_5 / (RearSensor+beta_5) - Sharp2Edge_RearD;
   FrontSensor = alpha_6 / (FrontSensor+beta_6) - Sharp2Edge_FrontD;
 
+
   // Debugg output
-  std::cerr<<'Front Right '<<FrontRightSensor<<std::endl;
-  std::cerr<<'Rear Right  '<<RearRightSensor<<std::endl;
-  std::cerr<<'Front Left  '<<FrontLeftSensor<<std::endl;
-  std::cerr<<'Rear Left   '<<RearLeftSensor<<std::endl;
-  std::cerr<<'Front       '<<FrontSensor<<std::endl;
-  std::cerr<<'Rear        '<<RearSensor<<std::endl;
+  // std::cerr<<'Front Right '<<FrontRightSensor<<std::endl;
+  // std::cerr<<'Rear Right  '<<RearRightSensor<<std::endl;
+  // std::cerr<<'Front Left  '<<FrontLeftSensor<<std::endl;
+  // std::cerr<<'Rear Left   '<<RearLeftSensor<<std::endl;
+  // std::cerr<<'Front       '<<FrontSensor<<std::endl;
+  // std::cerr<<'Rear        '<<RearSensor<<std::endl;
   
   // Message http://wiki.ros.org/rosbuild/msg
   
@@ -66,9 +67,8 @@ int main(int argc, char** argv)
 {
   ros::init(argc, argv, "SensorPublisher");
   ros::NodeHandle nh;
-// ***********
-  sharps_pub = nh.advertise<differential_drive::Sharp>("/sharps/Distance", 1);
-  sharps_sub = nh.subscribe("/sensors/ADC/",1,getDistance);
+  sharps_pub = nh.advertise<robot0::Distance>("/sharps/Distance", 1);
+  arduino_sub = nh.subscribe("/sensors/ADC/",1,getDistance);
   ros::Rate loop_rate(100);
   while(ros::ok())
     {
