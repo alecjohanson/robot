@@ -29,8 +29,8 @@ typedef struct {
 
 #define TKRIT1 0.16
 #define TKRIT2 0.16
-static const pidproperties_t left_plant={1020.0/19.0, 0.5, 0.5*TKRIT1, 0.12*TKRIT1};
-static const pidproperties_t right_plant={1020.0/19.0, 0.5, 0.5*TKRIT2, 0.12*TKRIT2};
+static const pidproperties_t left_plant={1020.0/19.0, 0.5, 0.75*TKRIT1, 0.12*TKRIT1};//k_i at 0.5 initially
+static const pidproperties_t right_plant={1020.0/19.0, 0.5, 0.75*TKRIT2, 0.12*TKRIT2};//sqme
 
 static piddata_t left_data;
 static piddata_t right_data;
