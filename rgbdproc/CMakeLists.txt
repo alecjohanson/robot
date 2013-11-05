@@ -31,7 +31,7 @@ link_directories(/home/robo/OpenNI-Linux-x64-2.2/Redist)
 rosbuild_add_executable(rgbdproc src/rgbdproc.cpp src/RGBDSource.cpp src/MainWindow.cpp src/PixbufConverter.cpp src/DepthToPointcloudConverter.cpp)
 target_link_libraries(rgbdproc OpenNI2)
 #rosbuild_add_compile_flags(rgbdproc -DHAVE_GUI)
-
+rosbuild_add_compile_flags(rgbdproc -march=native -mfpmath=sse)
 include($ENV{ROS_ROOT}/core/rosbuild/FindPkgConfig.cmake)
 pkg_check_modules(GTK2 REQUIRED gtk+-2.0)
 include_directories(${GTK2_INCLUDE_DIRS})
