@@ -17,6 +17,7 @@
 
 #define RES_X 320
 #define RES_Y 240
+#define FPS 30
 
 openni::Recorder rec;
 
@@ -74,13 +75,16 @@ int main(int argc, char **argv) {
     	mainwin=new MainWindow();
     }
 
-    std::cerr << (f_record?f_record:"-") <<':'<< (f_playback?f_playback:"-") <<std::endl;
+    std::cerr << (f_record?f_record:"-") <<':'<< (f_playback?f_playback:"-") << ':' <<have_gui <<std::endl;
 	RGBDSource rgbd(f_playback);
 	if(!rgbd.getDevice().isFile()) {
 		rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
 				openni::PIXEL_FORMAT_DEPTH_100_UM);
 		rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
 				openni::PIXEL_FORMAT_RGB888);
+	} else {
+		rgbd.getDevice().getPlaybackControl()->setRepeatEnabled(true);
+		rgbd.getDevice().getPlaybackControl()->setSpeed(1.0);
 	}
 	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
 	openni::VideoStream& depth=rgbd.getVideoStream(openni::SENSOR_DEPTH);
@@ -90,7 +94,7 @@ int main(int argc, char **argv) {
 				depth.getVideoMode().getResolutionY());
 		pbcolor=new PixbufConverter(color.getVideoMode());
 		pbcolor->setTarget(mainwin->getGtkImage(0,0));
-		color.addNewFrameListener(pbcolor);
+		//color.addNewFrameListener(pbcolor);
 		pbdepth=new PixbufConverter(depth.getVideoMode());
 		pbdepth->setTarget(mainwin->getGtkImage(1,0));
 		depth.addNewFrameListener(pbdepth);
@@ -103,17 +107,21 @@ int main(int argc, char **argv) {
 	}
 	DepthToPointcloudConverter pconv;
 	pconv.readStreamInfo(depth);
-	int lastFrame=0;
-	while(ros::ok()){
+	rgbd.startStreams();
+	while(ros::ok() && gtk_main_iteration_do(FALSE)){
 		openni::VideoFrameRef cframe, dframe;
-		color.readFrame(&cframe);
+//		color.readFrame(&cframe);
 		depth.readFrame(&dframe);
 		pconv.onNewFrame(dframe);
-		std::cerr << dframe.getFrameIndex()-lastFrame << "; "
-				  << dframe.getFrameIndex()-cframe.getFrameIndex() << " / "
-				  << dframe.getTimestamp() -cframe.getTimestamp() << std::endl;
-		lastFrame=dframe.getFrameIndex();
-		cframe.release();
+/*		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000/FPS) {
+			cframe.release();
+			color.readFrame(&cframe);
+		}
+		while((int64_t)cframe.getTimestamp()-(int64_t)dframe.getTimestamp()>500000/FPS) {
+			dframe.release();
+			depth.readFrame(&dframe);
+		}
+		cframe.release();*/
 		dframe.release();
 		ros::spinOnce();
 	}

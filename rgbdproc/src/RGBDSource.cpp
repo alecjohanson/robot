@@ -79,8 +79,10 @@ RGBDSource::RGBDSource(const char *uri) {
 			<< std::endl;
 		exit(-1);
 	}
-	m_dev.setDepthColorSyncEnabled(true);
-	m_dev.setImageRegistrationMode(openni::IMAGE_REGISTRATION_OFF);
+	if(!m_dev.isFile()) {
+		m_dev.setDepthColorSyncEnabled(true);
+		m_dev.setImageRegistrationMode(openni::IMAGE_REGISTRATION_OFF);
+	}
 }
 
 RGBDSource::~RGBDSource() {
