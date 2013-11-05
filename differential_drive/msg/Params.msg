@@ -1,6 +1,11 @@
 # PI Control parameters
-float32 K
-float32 KI
+# 
+uint16 K
+uint16 KI
+# =======
+#float32 K
+# float32 KI
+#
 uint16 INT_MAX
 uint16 ticks
 
