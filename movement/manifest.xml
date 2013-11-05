@@ -1,0 +1,17 @@
+<package>
+  <description brief="movement">
+
+     movement
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <depend package="rospy"/>
+  <depend package="roscpp"/>
+  <depend package="opencv2"/>
+  <url>http://ros.org/wiki/movement</url>
+
+</package>
+
+
