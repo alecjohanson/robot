@@ -14,7 +14,9 @@ DepthToPointcloudConverter::DepthToPointcloudConverter() :
 	m_pointsAlloc(0),
 	m_pointsLen(0),
 	m_hFOV(57.7*M_PI/180.0),
-	m_vFOV(45.0*M_PI/180.0)
+	m_vFOV(45.0*M_PI/180.0),
+	m_xlookup(0),
+	m_ylookup(0)
 {
 	// TODO Auto-generated constructor stub
 
@@ -25,39 +27,35 @@ DepthToPointcloudConverter::~DepthToPointcloudConverter() {
 }
 
 void DepthToPointcloudConverter::onNewFrame(openni::VideoFrameRef& v) {
-	int resX=v.getWidth();
-	int resY=v.getHeight();
-	if(m_pointsAlloc < resX*resY) {
-		m_points=realloc(m_points,resX*resY);
-		m_pointsAlloc=resX*resY;
-	}
+	if(!m_points) return;
 	m_pointsLen=0;
-	void *p_img=v.getData();
-	size_t linesz=v.getStrideInBytes();
+	const int resX=v.getWidth();
+	const int resY=v.getHeight();
+	const void * const p_img=v.getData();
+	const size_t linesz=v.getStrideInBytes();
 	for(int y=0; y<resY; ++y) {
-		uint16_t *line=static_cast<uint16_t *>(p_img+y*linesz);
+		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
+				static_cast<const uint8_t *>(p_img)+y*linesz);
 		for(int x=0; x<resX; ++x) {
 			if(line[x]==0) continue;
-			m_points[m_pointsLen].x=(2.0*x/resX-1.0)*tan(0.5*m_hFOV)*line[x];
-			//todo: m_xlookup[x]*line[x];
-			m_points[m_pointsLen].y=(2.0*y/resY-1.0)*tan(0.5*m_hFOV)*line[x];
-			//todo: m_ylookup[y]*line[x];
+			m_points[m_pointsLen].x=m_xlookup[x]*line[x];
+			m_points[m_pointsLen].y=m_ylookup[y]*line[x];
 			m_points[m_pointsLen].z=line[x];
 		}
 	}
 }
 
-virtual void DepthToPointcloudConverter::readStreamInfo(openni::VideoStream& v) {
+void DepthToPointcloudConverter::readStreamInfo(openni::VideoStream& v) {
 	m_hFOV=v.getHorizontalFieldOfView();
 	m_vFOV=v.getVerticalFieldOfView();
 	int resX=v.getVideoMode().getResolutionX();
 	int resY=v.getVideoMode().getResolutionY();
-	if(m_pointsAlloc < resX*resY) {
-		m_points=realloc(m_points,resX*resY*sizeof(point_t));
+	if(m_pointsAlloc < (size_t)(resX*resY)) {
+		m_points=static_cast<point_t*>(realloc(m_points,resX*resY*sizeof(point_t)));
 		m_pointsAlloc=resX*resY;
 	}
-	m_xlookup=realloc(m_xlookup,resX*sizeof(double));
-	m_ylookup=realloc(m_ylookup,resY*sizeof(double));
-	for(int i=0; i<resX; ++i) m_xlookup[i]=
-
+	m_xlookup=static_cast<double*>(realloc(m_xlookup,resX*sizeof(double)));
+	m_ylookup=static_cast<double*>(realloc(m_ylookup,resY*sizeof(double)));
+	for(int x=0; x<resX; ++x) m_xlookup[x]=(2.0*x/resX-1.0)*tan(0.5*m_hFOV);
+	for(int y=0; y<resY; ++y) m_ylookup[y]=(2.0*y/resY-1.0)*tan(0.5*m_vFOV);
 }

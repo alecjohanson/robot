@@ -21,9 +21,9 @@ private:
 		int16_t category;
 	} point_t;
 	point_t *m_points;
-	double *m_xlookup, *m_ylookup;
 	size_t m_pointsAlloc, m_pointsLen;
 	double m_hFOV, m_vFOV;
+	double *m_xlookup, *m_ylookup;
 };
 
 #endif /* DEPTHTOPOINTCLOUDCONVERTER_H_ */

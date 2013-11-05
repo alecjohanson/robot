@@ -31,8 +31,8 @@
 
 class RGBDSource {
 public:
+	RGBDSource(const char *uri);
 	~RGBDSource();
-	static RGBDSource& getInstance();
 	void setVideoMode(const openni::SensorType stype, const int w, const int h,
 			const int fps, openni::PixelFormat pixfmt)
 			throw(std::runtime_error);
@@ -41,9 +41,8 @@ public:
 	void startStreams();
 	void stopStreams();
 private:
-	RGBDSource();
-	RGBDSource(RGBDSource const &copy);
-	RGBDSource &operator=(RGBDSource const& copy);
+//	RGBDSource(RGBDSource const &copy);
+//	RGBDSource &operator=(RGBDSource const& copy);
 	void lazyInit(const openni::SensorType stype);
 	openni::Device m_dev;
 	openni::VideoStream m_vstreams[3];

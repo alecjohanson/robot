@@ -25,10 +25,10 @@
 #include "RGBDSource.h"
 #include <iostream>
 
-RGBDSource& RGBDSource::getInstance() {
+/*RGBDSource& RGBDSource::getInstance() {
 	static RGBDSource instance;
 	return instance;
-}
+}*/
 
 void RGBDSource::setVideoMode(openni::SensorType stype, int w, int h, int fps,
 		openni::PixelFormat pixfmt) throw(std::runtime_error) {
@@ -65,7 +65,7 @@ void RGBDSource::stopStreams() {
 		if(m_vstreams[i].isValid()) m_vstreams[i].stop();
 }
 
-RGBDSource::RGBDSource() {
+RGBDSource::RGBDSource(const char *uri) {
 	openni::Status s;
 	s=openni::OpenNI::initialize();
 	if(s!=openni::STATUS_OK) {
