@@ -12,8 +12,9 @@
 #include <getopt.h>
 #include "DepthToPointcloudConverter.h"
 
-#define RES_X 640
-#define RES_Y 480
+#define RES_X 320
+#define RES_Y 240
+#define FPS 30
 
 openni::Recorder rec;
 
@@ -50,14 +51,16 @@ int main(int argc, char **argv) {
     		break;
     	default:
     		abort();
+    		break;
     	}
     }
     if(f_record) f_playback=0;
     if(!f_playback) f_playback=openni::ANY_DEVICE;
+    ros::init(argc,argv,"rgbdproc");
 	RGBDSource rgbd(f_record);
-	rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
+	rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,FPS,
 			openni::PIXEL_FORMAT_DEPTH_100_UM);
-	rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
+	rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,FPS,
 			openni::PIXEL_FORMAT_RGB888);
 
 	atexit(exitHandler);
@@ -71,16 +74,22 @@ int main(int argc, char **argv) {
 	}
 	DepthToPointcloudConverter pconv;
 	pconv.readStreamInfo(depth);
-	int lastFrame=0;
+	rgbd.startStreams();
 	while(ros::ok()){
 		openni::VideoFrameRef cframe, dframe;
-		color.readFrame(&cframe);
 		depth.readFrame(&dframe);
+		color.readFrame(&cframe);
 		pconv.onNewFrame(dframe);
-		std::cerr << dframe.getFrameIndex()-lastFrame << "; "
-				  << dframe.getFrameIndex()-cframe.getFrameIndex() << " / "
-				  << dframe.getTimestamp() -cframe.getTimestamp() << std::endl;
-		lastFrame=dframe.getFrameIndex();
+		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000L/FPS) {
+			cframe.release();
+			color.readFrame(&cframe);
+		}
+		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()<-500000L/FPS) {
+			dframe.release();
+			depth.readFrame(&dframe);
+		}
+		std::cerr << (int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp() << std::endl;
+
 		cframe.release();
 		dframe.release();
 		ros::spinOnce();
