@@ -1,9 +1,9 @@
 /**
- * @file RGBDSource.h
+ * @file PixbufConverter.h
  * Description.
  * @author Christian Thießen
  * @copyright &copy; 2013 Christian Thießen
- * @date Oct 7, 2013
+ * @date Oct 8, 2013
  */
 /*
  *  Copyright 2013 Christian Thießen
@@ -22,31 +22,28 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef RGBDSOURCE_H_
-#define RGBDSOURCE_H_
+#ifndef PIXBUFCONVERTER_H_
+#define PIXBUFCONVERTER_H_
 
 #include <OpenNI.h>
-#include <stdexcept>
-#include <set>
+#include <gdk-pixbuf/gdk-pixbuf-core.h>
+#include <gtk/gtk.h>
 
-class RGBDSource {
+class PixbufConverter: public openni::VideoStream::NewFrameListener {
 public:
-	RGBDSource(const char *uri);
-	~RGBDSource();
-	void setVideoMode(const openni::SensorType stype, const int w, const int h,
-			const int fps, openni::PixelFormat pixfmt)
-			throw(std::runtime_error);
-	openni::VideoMode getVideoMode(const openni::SensorType stype);
-	openni::VideoStream &getVideoStream(const openni::SensorType stype);
-	openni::Device &getDevice();
-	void startStreams();
-	void stopStreams();
+	PixbufConverter(const openni::VideoMode &m);
+	~PixbufConverter();
+	void setTarget(GtkWidget *target);
+protected:
+	virtual void onNewFrame(openni::VideoStream& v);
 private:
-//	RGBDSource(RGBDSource const &copy);
-//	RGBDSource &operator=(RGBDSource const& copy);
-	void lazyInit(const openni::SensorType stype);
-	openni::Device m_dev;
-	openni::VideoStream m_vstreams[3];
+	int w,h;
+	GdkPixbuf *m_pixbuf;
+	GtkWidget *m_target;
+	gboolean m_prev_app_paintable, m_prev_double_buffered;
+	gint m_prev_sizerq_w, m_prev_sizerq_h;
+	gulong m_sighandler;
+	static const unsigned int DIST_MIN=3000, DIST_MAX=14000;
 };
 
-#endif /* RGBDSOURCE_H_ */
+#endif /* PIXBUFCONVERTER_H_ */

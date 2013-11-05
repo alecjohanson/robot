@@ -73,7 +73,7 @@ RGBDSource::RGBDSource(const char *uri) {
 			<< std::endl;
 		exit(-1);
 	}
-	s=m_dev.open(openni::ANY_DEVICE);
+	s=m_dev.open(uri);
 	if(s!=openni::STATUS_OK) {
 		std::cerr << "OpenNI Error: " << openni::OpenNI::getExtendedError()
 			<< std::endl;
@@ -88,6 +88,10 @@ RGBDSource::~RGBDSource() {
 		if(m_vstreams[i].isValid()) m_vstreams[i].destroy();
 	}
 	openni::OpenNI::shutdown();
+}
+
+openni::Device& RGBDSource::getDevice() {
+	return m_dev;
 }
 
 void RGBDSource::lazyInit(const openni::SensorType stype) {

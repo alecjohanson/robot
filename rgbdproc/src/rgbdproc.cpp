@@ -8,16 +8,20 @@
 #include <iostream>
 #include <ros/ros.h>
 #include "RGBDSource.h"
+#include "MainWindow.h"
 #include <OpenNI.h>
 #include <getopt.h>
+#include <gtk/gtk.h>
 #include "DepthToPointcloudConverter.h"
+#include "PixbufConverter.h"
 
-#define RES_X 640
-#define RES_Y 480
+#define RES_X 320
+#define RES_Y 240
 
 openni::Recorder rec;
 
 static void exitHandler(void);
+MainWindow *mainwin;
 int have_gui;
 
 static const struct option long_options[] = {
@@ -54,15 +58,43 @@ int main(int argc, char **argv) {
     }
     if(f_record) f_playback=0;
     if(!f_playback) f_playback=openni::ANY_DEVICE;
-	RGBDSource rgbd(f_record);
-	rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
-			openni::PIXEL_FORMAT_DEPTH_100_UM);
-	rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
-			openni::PIXEL_FORMAT_RGB888);
-
 	atexit(exitHandler);
+
+	ros::init(argc,argv,"rgbdproc");
+
+    if(have_gui) {
+    	if(!g_thread_supported()) {
+    		G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+    	    g_thread_init(0);
+    	    G_GNUC_END_IGNORE_DEPRECATIONS;
+    	}
+    	gdk_threads_init();
+    	gdk_threads_enter();
+    	gtk_init(&argc,&argv);
+    	mainwin=new MainWindow();
+    }
+
+    std::cerr << (f_record?f_record:"-") <<':'<< (f_playback?f_playback:"-") <<std::endl;
+	RGBDSource rgbd(f_playback);
+	if(!rgbd.getDevice().isFile()) {
+		rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
+				openni::PIXEL_FORMAT_DEPTH_100_UM);
+		rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
+				openni::PIXEL_FORMAT_RGB888);
+	}
 	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
 	openni::VideoStream& depth=rgbd.getVideoStream(openni::SENSOR_DEPTH);
+	PixbufConverter *pbcolor, *pbdepth;
+	if(have_gui) {
+		mainwin->setSizeRequest(depth.getVideoMode().getResolutionX(),
+				depth.getVideoMode().getResolutionY());
+		pbcolor=new PixbufConverter(color.getVideoMode());
+		pbcolor->setTarget(mainwin->getGtkImage(0,0));
+		color.addNewFrameListener(pbcolor);
+		pbdepth=new PixbufConverter(depth.getVideoMode());
+		pbdepth->setTarget(mainwin->getGtkImage(1,0));
+		depth.addNewFrameListener(pbdepth);
+	}
 	if(f_record) {
 		rec.create(f_record);
 		rec.attach(color,true);
@@ -91,4 +123,5 @@ int main(int argc, char **argv) {
 static void exitHandler(void) {
 	rec.stop();
 	rec.destroy();
+	if(mainwin) delete mainwin;
 }
