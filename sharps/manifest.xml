@@ -1,18 +1,17 @@
 <package>
-  <description brief="robot0">
+  <description brief="sharps">
 
-     robot0
+     sharps
 
   </description>
   <author>robo</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/robot0</url>
-  <depend package="roscpp"/>
+  <url>http://ros.org/wiki/sharps</url>
   <depend package="std_msgs"/>
-  <depend package="geometry_msgs"/>
+  <depend package="rospy"/>
+  <depend package="roscpp"/>
   <depend package="differential_drive"/>
-  <depend package="sharps"/>
 
 </package>
 

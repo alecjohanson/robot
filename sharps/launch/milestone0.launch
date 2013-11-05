@@ -1,8 +1,7 @@
 <launch>
   <group ns="robot0">
-    <node pkg="robot0" name="control" type="testwall"/>
-    <node pkg="sharps" name="sensors" type="sensors"/>	
-
+    <node pkg="handdetect" name="vision" type="handdetect"/>
+    <node pkg="robot0" name="control" type="milestone0"/>
     <node pkg="rosserial_python" name="motors" type="serial_node.py" args="/dev/ttyACM0"/>
   </group>
 </launch>

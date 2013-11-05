@@ -25,6 +25,7 @@ void followWall(const sharps::Distance &msg){
 
   //	msg.ch3;
   //	msg.ch4;
+  
   double Right_Center_WallD = 0;
   double Robot2Wall_Angle = 0;
   
@@ -34,24 +35,24 @@ void followWall(const sharps::Distance &msg){
 double turn=1;//active theta-control if near wall only
 double forward=1;//active x-control if
 
-// While it is turning, dont go foward.
-if (Robot2Wall_Angle>MaxFowardAngle || -Robot2Wall_Angle>MaxFowardAngle)
-	{forward=0.2;turn=1;}
 // If it is not near a wall, remove turning
-else if (abs(Right_Center_WallD-Wheel2Wall_D)>5)
-	{forward=1;turn=0;}
+if (abs(Right_Center_WallD-Wheel2Wall_D)>10)
+	{turn=0;}
+// While it is turning, dont go foward.
+else if (Robot2Wall_Angle>MaxFowardAngle || -Robot2Wall_Angle>MaxFowardAngle)
+	{forward=0;turn=1;}
 
 // Control
 double w = K_forward*(Right_Center_WallD-Wheel2Wall_D)*forward - k_theta*Robot2Wall_Angle*turn;
 
 double v = forward*RobotSpeed;
-//speeds
-double w1 = -1*(-w+v);//right wheel
-double w2 = -1*(v+w); //left wheel
+ 
+double w1= -1*(-w+v);//right wheel
+double w2= -1*(v+w); //left wheel
 
 
 
-if (false) { // change to false if you dont want to run it
+if (true) { // change to false if you dont want to run it
 // another kind of control (testing...)
 // only tested on table, don't know how to connect through wifi
 // has some kind of derivate control
@@ -64,7 +65,7 @@ if (false) { // change to false if you dont want to run it
 // /alfred 23/10
 	double Robot_Wheel_Radius = 0.06; // guess
 	// speed 2 dm/s or something
-	double Robot_Velocity = 0.5/Robot_Wheel_Radius; // [m/s / m = radians/s]
+	double Robot_Velocity = 0.2/Robot_Wheel_Radius; // [m/s / m = radians/s]
 	double Robot_IR14_Distance = IR_rightD*0.01; // [m] identifying IR's in which quadrant they are in
 	double Robot_Base_Length = 0.21; // (educated?) guess
 	double Robot_Curve_Velocity = Robot_Velocity; // guess
@@ -73,7 +74,7 @@ if (false) { // change to false if you dont want to run it
 	double Wall_Right_Distance = 0.10; // Distance to keep to wall
 	double Kt = 3; // Angle
 	double Kx = 8;   // distance
-	double Kd = 0.0; // derivate(its the angular velocity) sensitivity
+	double Kd = 0.1; // derivate(its the angular velocity) sensitivity
 
 	double Robot_Angular_Velocity_Max = Robot_Curve_Velocity/(Wall_Right_Distance+Robot_Base_Length/2);
 
@@ -95,8 +96,8 @@ if (false) { // change to false if you dont want to run it
 
 	// check if IR-distance is close enough for algorithm to be useful
 	//if (!(Robot_Right_Distance2Wall > 0.2)) {
-		w2 = Robot_Wheel_Left_Velocity;
-		w1 = Robot_Wheel_Right_Velocity;
+		w2 = -Robot_Wheel_Left_Velocity;
+		w1 = -Robot_Wheel_Right_Velocity;
 	//} else {
 		//w2 = 0;
 		//w1 = 0;
@@ -112,7 +113,7 @@ if (false) { // change to false if you dont want to run it
 
 
   // Debugg output
-//std::cerr<<FrontRightSensor<<' '<<RearRightSensor<<' '<<w<<"RIGHT: "<<w1<<" LEFT: "<<w2<<' '<<std::endl;
+  //std::cerr<<FrontRightSensor<<' '<<RearRightSensor<<' '<<w<<' '<<w1<<' '<<w2<<' '<<std::endl;
 
   // Publish into the speed topic.
 
