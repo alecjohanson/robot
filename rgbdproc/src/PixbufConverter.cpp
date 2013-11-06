@@ -93,7 +93,7 @@ void PixbufConverter::onNewFrame(openni::VideoStream& v) {
 			uint8_t *dst_val=dst_img+y*gdk_pixbuf_get_rowstride(m_pixbuf);
 			for(int x=0; x<w;++x) {
 				uint8_t g;
-				if(src_line[x]>DIST_MAX) g=0;
+				if(src_line[x]==0 || src_line[x]>DIST_MAX) g=0;
 				else if(src_line[x]<DIST_MIN) g=255;
 				else g=255-((unsigned int)src_line[x]-DIST_MIN)
 						*255U/(DIST_MAX-DIST_MIN);

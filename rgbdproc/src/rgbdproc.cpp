@@ -12,7 +12,7 @@
 #include <OpenNI.h>
 #include <getopt.h>
 #include <gtk/gtk.h>
-#include "DepthToPointcloudConverter.h"
+#include "PointcloudProcessor.h"
 #include "PixbufConverter.h"
 
 #define RES_X 320
@@ -60,16 +60,7 @@ int main(int argc, char **argv) {
     }
     if(f_record) f_playback=0;
     if(!f_playback) f_playback=openni::ANY_DEVICE;
-<<<<<<< HEAD
-=======
-    ros::init(argc,argv,"rgbdproc");
-	RGBDSource rgbd(f_record);
-	rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,FPS,
-			openni::PIXEL_FORMAT_DEPTH_100_UM);
-	rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,FPS,
-			openni::PIXEL_FORMAT_RGB888);
 
->>>>>>> 948d3da612afe626681f6a0d22fce1d2dc772fa4
 	atexit(exitHandler);
 
 	ros::init(argc,argv,"rgbdproc");
@@ -84,6 +75,7 @@ int main(int argc, char **argv) {
     	gdk_threads_enter();
     	gtk_init(&argc,&argv);
     	mainwin=new MainWindow();
+    	gdk_threads_leave();
     }
 
     std::cerr << (f_record?f_record:"-") <<':'<< (f_playback?f_playback:"-") << ':' <<have_gui <<std::endl;
@@ -99,16 +91,19 @@ int main(int argc, char **argv) {
 	}
 	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
 	openni::VideoStream& depth=rgbd.getVideoStream(openni::SENSOR_DEPTH);
-	PixbufConverter *pbcolor, *pbdepth;
+	PointcloudProcessor pconv;
+	pconv.readStreamInfo(depth);
+	//PixbufConverter *pbcolor, *pbdepth;
 	if(have_gui) {
 		mainwin->setSizeRequest(depth.getVideoMode().getResolutionX(),
 				depth.getVideoMode().getResolutionY());
-		pbcolor=new PixbufConverter(color.getVideoMode());
-		pbcolor->setTarget(mainwin->getGtkImage(0,0));
+		pconv.setDisplay(mainwin->getGtkImage(0,0));
+		//pbcolor=new PixbufConverter(color.getVideoMode());
+		//pbcolor->setTarget(mainwin->getGtkImage(0,0));
 		//color.addNewFrameListener(pbcolor);
-		pbdepth=new PixbufConverter(depth.getVideoMode());
-		pbdepth->setTarget(mainwin->getGtkImage(1,0));
-		depth.addNewFrameListener(pbdepth);
+		//pbdepth=new PixbufConverter(depth.getVideoMode());
+		//pbdepth->setTarget(mainwin->getGtkImage(1,0));
+		//depth.addNewFrameListener(pbdepth);
 	}
 	if(f_record) {
 		rec.create(f_record);
@@ -116,21 +111,15 @@ int main(int argc, char **argv) {
 		rec.attach(depth,false);
 		rec.start();
 	}
-	DepthToPointcloudConverter pconv;
-	pconv.readStreamInfo(depth);
 	rgbd.startStreams();
-<<<<<<< HEAD
-	while(ros::ok() && gtk_main_iteration_do(FALSE)){
-		openni::VideoFrameRef cframe, dframe;
-//		color.readFrame(&cframe);
-=======
 	while(ros::ok()){
+		GDK_THREADS_ENTER();
+		while(gtk_events_pending()) gtk_main_iteration();
+		GDK_THREADS_LEAVE();
 		openni::VideoFrameRef cframe, dframe;
->>>>>>> 948d3da612afe626681f6a0d22fce1d2dc772fa4
 		depth.readFrame(&dframe);
-		color.readFrame(&cframe);
+//		color.readFrame(&cframe);
 		pconv.onNewFrame(dframe);
-<<<<<<< HEAD
 /*		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000/FPS) {
 			cframe.release();
 			color.readFrame(&cframe);
@@ -138,21 +127,9 @@ int main(int argc, char **argv) {
 		while((int64_t)cframe.getTimestamp()-(int64_t)dframe.getTimestamp()>500000/FPS) {
 			dframe.release();
 			depth.readFrame(&dframe);
+		std::cerr << (int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp() << std::endl;
 		}
 		cframe.release();*/
-=======
-		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000L/FPS) {
-			cframe.release();
-			color.readFrame(&cframe);
-		}
-		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()<-500000L/FPS) {
-			dframe.release();
-			depth.readFrame(&dframe);
-		}
-		std::cerr << (int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp() << std::endl;
-
-		cframe.release();
->>>>>>> 948d3da612afe626681f6a0d22fce1d2dc772fa4
 		dframe.release();
 		ros::spinOnce();
 	}

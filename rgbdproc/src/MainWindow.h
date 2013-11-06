@@ -38,7 +38,7 @@ public:
 	GtkWidget *getGtkImage(int x, int y);
 private:
 	GtkWidget *m_window, *m_grid;
-	static const int IMAGES_X=2, IMAGES_Y=1;
+	static const int IMAGES_X=1, IMAGES_Y=1;
 public:
 	GtkWidget *m_images[IMAGES_Y][IMAGES_X];
 };
