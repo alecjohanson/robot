@@ -9,6 +9,7 @@
 #include <cmath>
 #include "PointcloudProcessor.h"
 #include "MainWindow.h"
+#include "PlaneEstimator.h"
 #include <iostream>
 
 PointcloudProcessor::PointcloudProcessor() :
@@ -39,6 +40,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	const double d_min=-m_camHeight*1.05;
 	const double d_max=-m_camHeight*0.95;
 
+	PlaneEstimator floor;
+
 	uint8_t * const dst_img=m_pixbuf?gdk_pixbuf_get_pixels(m_pixbuf):0;
 	const int dst_rowstride=m_pixbuf?gdk_pixbuf_get_rowstride(m_pixbuf):0;
 	for(int y=0; y<h; ++y) {
@@ -58,11 +61,12 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 			m_points[m_pointsLen].x=m_xlookup[x]*z;
 			m_points[m_pointsLen].y=m_ylookup[y]*z;
 			m_points[m_pointsLen].z=z;
-			double d=Vec3D<double>(
-					m_points[m_pointsLen].x,
-					m_points[m_pointsLen].y,
-					m_points[m_pointsLen].z
-					)*m_floornormal;
+			double d= m_points[m_pointsLen].x*m_floornormal[0]
+					 +m_points[m_pointsLen].y*m_floornormal[1]
+					 +m_points[m_pointsLen].z*m_floornormal[2];
+			if(d<d_max && d>d_min) {
+				floor.addPoint(m_points[m_pointsLen].x,m_points[m_pointsLen].y,z);
+			}
 			if(m_pixbuf) {
 				uint8_t g;
 				if(z>DIST_MAX) g=0;
@@ -70,11 +74,16 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 				else g=255-((unsigned int)z-DIST_MIN)
 						*255U/(DIST_MAX-DIST_MIN);
 				*dst_val++=g;
-				if(d<d_max && d>d_min) g=0;
+				if(d<-d_max && d>d_min) g=0;
 				*dst_val++=g;
 				*dst_val++=g;
 			}
 		}
+	}
+	if(floor.getNumPoints()>20000) {
+		//std::cerr<<floor.getNumPoints()<<" Points; h="<<floor.getDistance()<<'\n';
+		m_camHeight=floor.getDistance();
+		m_floornormal=floor.getNormal();
 	}
 	if(m_display) {
 		gdk_threads_enter();
@@ -114,14 +123,14 @@ void PointcloudProcessor::setCamOrientation(double upTilt, double rightTilt,
 	 * In our mechanics, cam is first tilted left (bad camera hinge), then down.
 	 * => floor normal [0; -1; 0] becomes [-rs; -rc*uc; rc*us]
 	 */
-	m_floornormal=Vec3D<double>(-rs, -rc*uc, rc*us);
+	m_floornormal<<-rs, -rc*uc, rc*us;
 }
 
 PointcloudProcessor::camOrientation_t PointcloudProcessor::getCamOrientation() {
 	camOrientation_t result;
 	result.height=m_camHeight;
-	result.rightTilt=asin(-m_floornormal.x);
-	result.upTilt=asin(m_floornormal.z/sqrt(1-m_floornormal.x*m_floornormal.x));
+	result.rightTilt=asin(-m_floornormal[0]);
+	result.upTilt=asin(m_floornormal[2]/sqrt(1-m_floornormal[0]*m_floornormal[0]));
 	return result;
 }
 

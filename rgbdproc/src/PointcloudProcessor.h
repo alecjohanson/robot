@@ -8,7 +8,7 @@
 #ifndef POINTCLOUDPROCESSOR_H_
 #define POINTCLOUDPROCESSOR_H_
 
-#include "Vec3D.h"
+#include <Eigen/Core>
 #include <gtk/gtk.h>
 
 class PointcloudProcessor {
@@ -34,7 +34,7 @@ private:
 	size_t m_pointsAlloc, m_pointsLen;
 	double m_hFOV, m_vFOV;
 	double *m_xlookup, *m_ylookup;
-	Vec3D<double> m_floornormal;
+	Eigen::Vector3d m_floornormal;
 	double m_camHeight;
 
 	int w,h;
