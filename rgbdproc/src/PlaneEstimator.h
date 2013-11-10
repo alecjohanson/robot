@@ -8,7 +8,7 @@
 #ifndef PLANEESTIMATOR_H_
 #define PLANEESTIMATOR_H_
 
-#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -16,7 +16,7 @@ class PlaneEstimator {
 public:
 	PlaneEstimator();
 	~PlaneEstimator();
-	void addPoint(int16_t x, int16_t y, int16_t z);
+	void addPoint(Eigen::Matrix<int16_t,3,1> &m);
 	Eigen::Vector3d &getNormal();
 	double getDistance();
 //	double getMSE();

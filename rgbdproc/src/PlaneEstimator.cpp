@@ -21,22 +21,23 @@ PlaneEstimator::PlaneEstimator() :
 PlaneEstimator::~PlaneEstimator() {
 }
 
-void PlaneEstimator::addPoint(int16_t x, int16_t y, int16_t z) {
-	xx+=(int64_t)x*(int64_t)x;
-	xy+=(int64_t)x*(int64_t)y;
-	xz+=(int64_t)x*(int64_t)z;
-	yy+=(int64_t)y*(int64_t)y;
-	yz+=(int64_t)y*(int64_t)z;
-	_x+=x;
-	_y+=y;
-	_z+=z;
-	zz+=(int64_t)z*(int64_t)z;
+void PlaneEstimator::addPoint(Eigen::Matrix<int16_t,3,1> &m) {
+	xx+=(int64_t)m[0]*(int64_t)m[0];
+	xy+=(int64_t)m[0]*(int64_t)m[1];
+	xz+=(int64_t)m[0]*(int64_t)m[2];
+	yy+=(int64_t)m[1]*(int64_t)m[1];
+	yz+=(int64_t)m[1]*(int64_t)m[2];
+	_x+=m[0];
+	_y+=m[1];
+	_z+=m[2];
+	zz+=(int64_t)m[2]*(int64_t)m[2];
 	numPoints++;
 }
 
 Eigen::Vector3d &PlaneEstimator::getNormal() {
 	if(isnan(dist)) calcPlane();
 	return normal;
+	//return cam2robot.row(2);
 }
 
 double PlaneEstimator::getDistance() {
@@ -47,12 +48,6 @@ double PlaneEstimator::getDistance() {
 size_t PlaneEstimator::getNumPoints() const {
 	return numPoints;
 }
-/*
-double PlaneEstimator::getMSE() {
-	if(isnan(dist)) calcPlane();
-	return mse;
-}
-*/
 
 void PlaneEstimator::calcPlane(void) {
 	Eigen::Matrix3d XtX;

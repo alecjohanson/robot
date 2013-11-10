@@ -27,15 +27,23 @@ public:
 	camOrientation_t getCamOrientation();
 private:
 	typedef struct {
-		int16_t x,y,z;
+		Eigen::Matrix<int16_t,3,1> p;
 		int16_t category;
 	} point_t;
+	typedef struct {
+		uint16_t img_xmin, img_xmax, img_ymin, img_ymax;
+		int16_t xmin, xmax;
+		int16_t ymin, ymax;
+		int16_t zmin, zmax;
+	} bbox_t;
 	point_t *m_points;
-	size_t m_pointsAlloc, m_pointsLen;
+	size_t m_pointsAlloc;
 	double m_hFOV, m_vFOV;
 	double *m_xlookup, *m_ylookup;
 	Eigen::Vector3d m_floornormal;
+	Eigen::Matrix<double,3,3,Eigen::RowMajor> cam2robot;
 	double m_camHeight;
+	double m_maxAngle;
 
 	int w,h;
 	GdkPixbuf *m_pixbuf;
@@ -44,6 +52,8 @@ private:
 	gint m_prev_sizerq_w, m_prev_sizerq_h;
 	gulong m_sighandler;
 	static const unsigned int DIST_MIN=3000, DIST_MAX=14000;
+
+	double pxToPoint(point_t *pt,int x, int y, uint16_t z);
 };
 
 #endif /* POINTCLOUDPROCESSOR_H_ */
