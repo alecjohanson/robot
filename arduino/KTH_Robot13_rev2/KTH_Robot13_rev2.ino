@@ -147,9 +147,9 @@ void setup()  {
 	flags|=FLAG_PWMDIRECT;
 
 	//todo: These values need some more adjustment.
-	MotorA.Set_control_parameters(12.0, 5.0, 30, 10800);
+	MotorA.Set_control_parameters(12.0, 5.0, 30, 360);
 	MotorA.Set_nlin_parameters(0.64,56.0);
-	MotorB.Set_control_parameters(12.0, 5.0, 30, 10800);
+	MotorB.Set_control_parameters(12.0, 5.0, 30, 360);
 	MotorB.Set_nlin_parameters(0.64,62.0);
 
 	//configure external interrupts
