@@ -12,30 +12,29 @@ using namespace std;
 
 static ros::Publisher speed_pub;
 static ros::Publisher movement_completed_publisher;
-static ros::Subscriber subscriber;
+static ros::Subscriber move_sub;
 static ros::Subscriber odom_sub;
 
-double const MAX_SPEED = 6;
-double const MIN_SPEED = 1;
-double const MAX_TURN_SPEED = MAX_SPEED;
-double const MIN_TURN_SPEED = MIN_SPEED;
-double ACCEL_COEFF = 6; //Increase for "smoother" transitions
-double TURNING_COEFF = ACCEL_COEFF;
+double const MAX_SPEED = (0.5/0.05);
+double const MIN_SPEED = (0.02/0.05);
+double const MAX_TURN_SPEED = (MAX_SPEED*0.8);
+double const MIN_TURN_SPEED = (MIN_SPEED);
+double const ACCEL_RANGE_LIN = 0.2;
+double const ACCEL_RANGE_ROT = (M_PI*0.5);
 
 //Value to be set at beginning
 double initialX = 0;
 double initialY = 0;
-double initialTheta = 0;
 double previousTheta = 0;
 double angleTraveled = 0;
 bool turn;
-int magnitude = 0;
+double magnitude = 0;
+volatile enum state_t {
+	STBY, INIT, MOVING
+} state;
 
-ros::NodeHandle nh;
-
-static const string odometryTopic = "differential_drive/Odometry";
 void reset();
-void setInitialOdometry(const differential_drive::Odometry &msg);
+void odometryHandler(const differential_drive::Odometry &msg);
 double calcWheelSpeed(double distanceFromEndPoint, bool turn);
 void finalize();
 void executeMovement(const differential_drive::Odometry &msg);
@@ -45,27 +44,32 @@ void move(const movement::Movement &msg)
     reset();
     turn = msg.turn;
     magnitude = msg.magnitude;
-    //listen to encoder msgs
-    nh.subscribe(odometryTopic,1,setInitialOdometry);
+    state=INIT;
 }
 
 void reset()
 {
     initialX = 0;
     initialY = 0;
-    initialTheta = 0;
     previousTheta = 0;
     angleTraveled = 0;
-    magnitude = 0;;
+    magnitude = 0;
 }
 
-void setInitialOdometry(const differential_drive::Odometry &msg)
+void odometryHandler(const differential_drive::Odometry &msg)
 {
-    initialX = msg.x;
-    initialY = msg.y;
-    initialTheta = msg.theta;
-    odom_sub.shutdown();
-    nh.subscribe(odometryTopic,1,executeMovement);
+	switch(state) {
+	case STBY: return;
+	case INIT:
+		initialX = msg.x;
+		initialY = msg.y;
+		previousTheta = msg.theta;
+		state=MOVING;
+		break;
+	case MOVING:
+		executeMovement(msg);
+		break;
+	}
 }
 
 void executeMovement(const differential_drive::Odometry &msg)
@@ -79,27 +83,30 @@ void executeMovement(const differential_drive::Odometry &msg)
         //This is done this way so > 2pi can be achieved if weirdly desired
         angleTraveled += msg.theta - previousTheta;
         previousTheta = msg.theta;
+	double wheelSpeed;
+	double angleToEndPoint=0.0;
         if ((magnitude > 0 && angleTraveled > magnitude)
             || (magnitude < 0 && angleTraveled < magnitude))
         {
             finalize();
-        }
-
-        //Set wheel speeds to keep turning
-        double angleToEndPoint = (angleTraveled < (magnitude - angleTraveled)) ? 
-                                      angleTraveled : magnitude - angleTraveled;
-        double wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
+		wheelSpeed=0.0;
+        } else {
+		//Set wheel speeds to keep turning
+		angleToEndPoint = std::min(abs(angleTraveled),abs(magnitude - angleTraveled));
+		wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
+	}
 
         if (angleTraveled > magnitude)
-        {
-            w1Speed = wheelSpeed;
-            w2Speed = -wheelSpeed;
-        }
-        else
         {
             w1Speed = -wheelSpeed;
             w2Speed = wheelSpeed;
         }
+        else
+        {
+            w1Speed = wheelSpeed;
+            w2Speed = -wheelSpeed;
+        }
+	cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
     }
     else //Move strait
     {
@@ -109,63 +116,65 @@ void executeMovement(const differential_drive::Odometry &msg)
         if (distance > magnitude)
         {
             finalize();
-        }
-        //Calc wheel speeds
-        double distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
-                                      distance : magnitude - distance;
-        double wheelSpeed = calcWheelSpeed(distanceToAnEndPoint, false);        
-        w1Speed = wheelSpeed;
-        w2Speed = wheelSpeed;
+		w1Speed=0.0;
+        } else {
+		//Calc wheel speeds
+		double distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
+		                              distance : magnitude - distance;
+		w1Speed = calcWheelSpeed(distanceToAnEndPoint, false);
+	}
+	cerr<<distance<<' '<<w1Speed<<endl;
+	w2Speed=w1Speed;
     }
 
     spd.W1 = w1Speed;
     spd.W2 = w2Speed;
     spd.header.stamp = ros::Time::now();
+    speed_pub.publish(spd);
 
-    //Completed the movement
-    movement_completed_publisher.publish(msg);
 }
 
 void finalize()
 {
      //Stop subscribing and wasting the calculation saying we are finished
-    odom_sub.shutdown();
+    state=STBY;
     //TODO::Advertise we are done?
+    //Completed the movement
+    //movement_completed_publisher.publish(msg);
 }
 
 
 double calcWheelSpeed(double distanceFromEndPoint, bool turn)
 {
-    double max, min;
-    double accel;
+/*
+double const MAX_SPEED = (1.0/0.05);
+double const MIN_SPEED = (0.1/0.05);
+double const MAX_TURN_SPEED = (MAX_SPEED*0.5);
+double const MIN_TURN_SPEED = (MIN_SPEED*0.8);
+double const ACCEL_RANGE_LIN 0.1;
+double const ACCEL_RANGE_ROT (M_PI*0.25);
+*/
     if (turn)
     {
-      max = MAX_TURN_SPEED;
-      min = MIN_TURN_SPEED;
-      accel = TURNING_COEFF;
+	if(distanceFromEndPoint>ACCEL_RANGE_ROT) return MAX_TURN_SPEED;
+	else return MIN_TURN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_ROT)*(MAX_TURN_SPEED-MIN_TURN_SPEED);
     }
     else
     {
-      max = MAX_SPEED;
-      min = MAX_SPEED;
-      accel = ACCEL_COEFF;
+	if(distanceFromEndPoint>ACCEL_RANGE_LIN) return MAX_SPEED;
+	else return MIN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_LIN)*(MAX_SPEED-MIN_SPEED);
     }
-    
-
-    //Wheel speed is calculated on a simple piecewise function with constant accel and deccel
-    if (distanceFromEndPoint > ACCEL_COEFF)
-      return max;
-    else
-     return std::max(distanceFromEndPoint/accel*max, min);   
 }
 
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "controller");
+    ros::NodeHandle nh;
 
     speed_pub = nh.advertise<differential_drive::Speed>("/motion/Speed",1);
     movement_completed_publisher = nh.advertise<movement::Movement>("/simpleMovement/moveCompleted",1);
-    subscriber = nh.subscribe("/IRtest/movement",1,move);
+    move_sub=nh.subscribe("/IRtest/movement",1,move);
+    odom_sub=nh.subscribe("/motion/Odometry",1,odometryHandler);
 
     ros::Rate loop_rate(100);
 

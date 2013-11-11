@@ -68,10 +68,8 @@ void Motors::Set_speed(int u)	{
  * parameters >
  * 		@ float W : 		 desired speed, rad/s
  * 		@ float Te : 		 sampling period, in seconds
- * 		@ int16_t deltaStep : 	 encoder difference
  */
-void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
-	_speed = deltaStep*2.*M_PI/(_ticks_per_rev*Te);
+void Motors::Speed_regulation(float W, float Te) {
 	_error = W - _speed;
 	_int+= _error*Te;
 
@@ -90,6 +88,14 @@ void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
 	if(W<0.0) digitalWrite(_dir_pin, LOW);
 	else digitalWrite(_dir_pin, HIGH);
 	analogWrite(_pwm_pin,pwm);
+}
+
+/*
+ * parameters >
+ * 		@ int16_t deltaStep : 	 encoder difference
+ */
+void Motors::calculateSpeed(float Te, int16_t deltaStep) {
+	_speed = deltaStep*2.*M_PI/(_ticks_per_rev*Te);
 }
 
 /*
