@@ -76,7 +76,7 @@
 #define PERIOD_ADC_MS 80 ///< IR sensors have a measurement period of 40.
 #define PERIOD_BATT_MS 2000
 
-#define N 10 // Averaging of measured speed with the N last values
+#define N 2 // Averaging of measured speed with the N last values
 
 /* Battery monitoring const */
 #define seuil_cell 3.6
@@ -102,7 +102,7 @@ volatile static float W2_set;
 /// timer period of encoder measurements and PI control
 static const float Te=PERIOD_TIMER_MS*1e-3;
 /// Wheel base of the robot
-static float B = 208.8e-3;
+static float B = 205e-3;
 /// Radius of the right wheel
 static float r_r = 0.5*99.8e-3;
 /// Radius of the left wheel
@@ -147,10 +147,10 @@ void setup()  {
 	flags|=FLAG_PWMDIRECT;
 
 	//todo: These values need some more adjustment.
-	MotorA.Set_control_parameters( 5.0, 1.7, 30, 360);
-	MotorA.Set_nlin_parameters(0.64,56.0);
-	MotorB.Set_control_parameters( 5.0, 1.6, 30, 360);
-	MotorB.Set_nlin_parameters(0.64,62.0);
+	MotorA.Set_control_parameters(6.0, 2, 30, 360);
+	MotorA.Set_nlin_parameters(0.64,57.0);
+	MotorB.Set_control_parameters(6.0, 2, 30, 360);
+	MotorB.Set_nlin_parameters(0.64,63.0);
 
 	//configure external interrupts
 	EICRA=0x55;  //set interrupts 0..3 to trigger on both edges
@@ -302,8 +302,8 @@ static void updateOdometry(void) {
 	static int i = 0;
 	static float speeds_lin[N],speeds_rot[N];
 	//put new rotational speed values
-	speeds_lin[i] = 1.0/2*(r_r*MotorA._speed-r_l*MotorB._speed);
-	speeds_rot[i] = 1.0/B*(r_r*MotorA._speed+r_l*MotorB._speed);
+	speeds_lin[i] = 0.5*(r_r*MotorA._speed+r_l*MotorB._speed);
+	speeds_rot[i] = 1.0/B*(r_r*MotorA._speed-r_l*MotorB._speed);
 	if(i<N-1)  {i++;}
 	else  {i=0;}
 
@@ -321,16 +321,16 @@ static void updateOdometry(void) {
 	x+= V_lin*Te*cos(theta);
 	y+= V_lin*Te*sin(theta);
 
-	static uint8_t cpt = 0;
+	/*static uint8_t cpt = 0;
 	if(cpt<10)  {cpt++;}
 	else  {
-		cpt = 0;
+		cpt = 0;*/
 		// Publish Odometry
 		odomsg.x = x ;
 		odomsg.y = y;
 		odomsg.theta = theta ;
 		pubOdom.publish(&odomsg);
-	}
+	//}
 }
 
 ISR(EXTINT(ENC1_PHASE1)) {
@@ -400,9 +400,11 @@ ISR(TIMER4_CAPT_vect) {
 	encmsg.encoder1 = encoder1_loc;
 	encmsg.encoder2 = encoder2_loc;
 	uint8_t f=flags;
+	MotorA.calculateSpeed(Te,encmsg.delta_encoder1);
+	MotorB.calculateSpeed(Te,encmsg.delta_encoder2);
 	if(!(f&FLAG_PWMDIRECT)) {
-		MotorA.Speed_regulation(W1_set,Te,encmsg.delta_encoder1);
-		MotorB.Speed_regulation(W2_set,Te,encmsg.delta_encoder2);
+		MotorA.Speed_regulation(W1_set,Te);
+		MotorB.Speed_regulation(W2_set,Te);
 	}
 	encmsg.timestamp = PERIOD_TIMER_MS*1e-3;
 	f|=FLAG_ENCUPDATE;
