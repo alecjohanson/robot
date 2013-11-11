@@ -2,11 +2,12 @@
 #include <ros/ros.h>
 #include <sharps/Distance.h>
 #include <differential_drive/Speed.h>
-#include "IRtest.h"
+#include <differential_drive/Odometry.h>
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
 #include <iomanip>
+#include <movement/Movement.h>
 using namespace std;
 
 static ros::Publisher speed_pub;
@@ -22,15 +23,22 @@ double ACCEL_COEFF = 6; //Increase for "smoother" transitions
 double TURNING_COEFF = ACCEL_COEFF;
 
 //Value to be set at beginning
-float initialX = 0;
-float initialY = 0;
-float initialTheta = 0;
-float previousTheta = 0;
-float angleTraveledi = 0;
+double initialX = 0;
+double initialY = 0;
+double initialTheta = 0;
+double previousTheta = 0;
+double angleTraveled = 0;
 bool turn;
-int magnitude = 0;;
+int magnitude = 0;
 
-private const string odometryTopic = "differentialDrive/Odometry";
+ros::NodeHandle nh;
+
+static const string odometryTopic = "differential_drive/Odometry";
+void reset();
+void setInitialOdometry(const differential_drive::Odometry &msg);
+double calcWheelSpeed(double distanceFromEndPoint, bool turn);
+void finalize();
+void executeMovement(const differential_drive::Odometry &msg);
 
 void move(const movement::Movement &msg)
 {
@@ -38,7 +46,7 @@ void move(const movement::Movement &msg)
     turn = msg.turn;
     magnitude = msg.magnitude;
     //listen to encoder msgs
-    odom_sub.subscribe(odometryTopic,1,setInitialOdometry);
+    nh.subscribe(odometryTopic,1,setInitialOdometry);
 }
 
 void reset()
@@ -47,22 +55,22 @@ void reset()
     initialY = 0;
     initialTheta = 0;
     previousTheta = 0;
-    angleTraveledi = 0;
+    angleTraveled = 0;
     magnitude = 0;;
 }
 
-void setInitialOdometry(const differentialDrive::Odometry &msg)
+void setInitialOdometry(const differential_drive::Odometry &msg)
 {
-    this.initialX = msg.x;
-    this.initialY = msg.y;
-    this.initialTheta = msg.theta;
+    initialX = msg.x;
+    initialY = msg.y;
+    initialTheta = msg.theta;
     odom_sub.shutdown();
-    odom_sub.subscribe(odometryTopic,1,executeMovement);
+    nh.subscribe(odometryTopic,1,executeMovement);
 }
 
-void executeMovement(const differentalDrive::Odometry &msg)
+void executeMovement(const differential_drive::Odometry &msg)
 {
-    Speed spd;
+    differential_drive::Speed spd;
     double w1Speed;
     double w2Speed;
 
@@ -78,7 +86,7 @@ void executeMovement(const differentalDrive::Odometry &msg)
         }
 
         //Set wheel speeds to keep turning
-        float angleToEndPoint = (angleTraveled < (magnitude - angleTraveled)) ? 
+        double angleToEndPoint = (angleTraveled < (magnitude - angleTraveled)) ? 
                                       angleTraveled : magnitude - angleTraveled;
         double wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
 
@@ -97,21 +105,21 @@ void executeMovement(const differentalDrive::Odometry &msg)
     {
         //Check Distance traveled
         //TODO:: maybe put in checks to make sure theta stays the same
-        float distance = distanceBetween(initialX, msg.x, intitialY, msg.y);
+        double distance = hypot(initialX-msg.x,initialY-msg.y);
         if (distance > magnitude)
         {
             finalize();
         }
         //Calc wheel speeds
-        float distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
+        double distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
                                       distance : magnitude - distance;
-        double wheelSpeed = calcWheelSpeed(distance, false);        
+        double wheelSpeed = calcWheelSpeed(distanceToAnEndPoint, false);        
         w1Speed = wheelSpeed;
         w2Speed = wheelSpeed;
     }
 
-    spd.w1 = w1Speed;
-    spd.w2 = w2Speed;
+    spd.W1 = w1Speed;
+    spd.W2 = w2Speed;
     spd.header.stamp = ros::Time::now();
 
     //Completed the movement
@@ -126,21 +134,21 @@ void finalize()
 }
 
 
-double calcWheelSpeed(float distanceFromEndPoint, bool turn)
+double calcWheelSpeed(double distanceFromEndPoint, bool turn)
 {
-    float max, min;
+    double max, min;
     double accel;
     if (turn)
     {
       max = MAX_TURN_SPEED;
       min = MIN_TURN_SPEED;
-      accl = TURNING_COEFF;
+      accel = TURNING_COEFF;
     }
     else
     {
       max = MAX_SPEED;
       min = MAX_SPEED;
-      accl = ACCEL_COEFF;
+      accel = ACCEL_COEFF;
     }
     
 
@@ -148,32 +156,18 @@ double calcWheelSpeed(float distanceFromEndPoint, bool turn)
     if (distanceFromEndPoint > ACCEL_COEFF)
       return max;
     else
-     return max(distanceFromEndPoint/accl*max, min);   
+     return std::max(distanceFromEndPoint/accel*max, min);   
 }
 
-float distanceBetween(x1,x2,y1,y2)
-{
-        float tempX = x1 - x2; 
-        float tempY = y1 - y2;
-
-        float tempX = tempX * tempX;
-        float tempY = tempY * tempY;
-
-        float distance = tempX + tempY;
-        return sqrt(distance);
-}
-
-
-int main(int argc, const char* argv[])
+int main(int argc, char** argv)
 {
     ros::init(argc, argv, "controller");
-    ros::NodeHandle nh;
 
-    speed_pub = nh.advertise<Speed>("/motion/Speed",1);
-    movement_completed_publisher = nh.advertise<Movement>("/simpleMovement/moveCompleted");
+    speed_pub = nh.advertise<differential_drive::Speed>("/motion/Speed",1);
+    movement_completed_publisher = nh.advertise<movement::Movement>("/simpleMovement/moveCompleted",1);
     subscriber = nh.subscribe("/IRtest/movement",1,move);
 
-    ros::Rate looprate(100);
+    ros::Rate loop_rate(100);
 
     while(ros::ok())
     {
