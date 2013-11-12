@@ -80,23 +80,21 @@ int main(int argc, char **argv) {
 
     std::cerr << (f_record?f_record:"-") <<':'<< (f_playback?f_playback:"-") << ':' <<have_gui <<std::endl;
 	RGBDSource rgbd(f_playback);
-	if(!rgbd.getDevice().isFile()) {
-		rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
-				openni::PIXEL_FORMAT_DEPTH_100_UM);
-		rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
-				openni::PIXEL_FORMAT_RGB888);
-	} else {
+	if(rgbd.getDevice().isFile()) {
 		rgbd.getDevice().getPlaybackControl()->setRepeatEnabled(true);
 		rgbd.getDevice().getPlaybackControl()->setSpeed(1.0);
+	} else {
+		rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
+				openni::PIXEL_FORMAT_DEPTH_100_UM);
+		/*rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
+				openni::PIXEL_FORMAT_RGB888);*/
 	}
-	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
+	//openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
 	openni::VideoStream& depth=rgbd.getVideoStream(openni::SENSOR_DEPTH);
 	PointcloudProcessor pconv;
 	pconv.readStreamInfo(depth);
 	//PixbufConverter *pbcolor, *pbdepth;
 	if(have_gui) {
-		mainwin->setSizeRequest(depth.getVideoMode().getResolutionX(),
-				depth.getVideoMode().getResolutionY());
 		pconv.setDisplay(mainwin->getGtkImage(0,0));
 		//pbcolor=new PixbufConverter(color.getVideoMode());
 		//pbcolor->setTarget(mainwin->getGtkImage(0,0));
@@ -107,19 +105,32 @@ int main(int argc, char **argv) {
 	}
 	if(f_record) {
 		rec.create(f_record);
-		rec.attach(color,true);
+		//rec.attach(color,false);
 		rec.attach(depth,false);
 		rec.start();
 	}
 	rgbd.startStreams();
+	bool objectmode=false;
 	while(ros::ok()){
-		GDK_THREADS_ENTER();
-		while(gtk_events_pending()) gtk_main_iteration();
-		GDK_THREADS_LEAVE();
-		openni::VideoFrameRef cframe, dframe;
+		if(have_gui) {
+			GDK_THREADS_ENTER();
+			while(gtk_events_pending()) gtk_main_iteration();
+			GDK_THREADS_LEAVE();
+		}
+//		openni::VideoFrameRef cframe;
+		openni::VideoFrameRef dframe;
 		depth.readFrame(&dframe);
 //		color.readFrame(&cframe);
 		pconv.onNewFrame(dframe);
+		if(!rgbd.getDevice().isFile() && pconv.objectDetected()!=objectmode) {
+			if(objectmode)
+				rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,
+								openni::PIXEL_FORMAT_DEPTH_100_UM);
+			else
+				rgbd.setVideoMode(openni::SENSOR_DEPTH,640,480,30,
+								openni::PIXEL_FORMAT_DEPTH_100_UM);
+			objectmode=!objectmode;
+		}
 /*		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000/FPS) {
 			cframe.release();
 			color.readFrame(&cframe);

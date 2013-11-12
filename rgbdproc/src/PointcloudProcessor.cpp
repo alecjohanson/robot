@@ -14,32 +14,38 @@
 #include <stdint.h>
 
 PointcloudProcessor::PointcloudProcessor() :
-	m_points(0),
 	m_pointsAlloc(0),
 	m_hFOV(57.7*M_PI/180.0),
 	m_vFOV(45.0*M_PI/180.0),
-	m_xlookup(0),
-	m_ylookup(0),
+	objectFrames(0),
 
-	w(0), h(0),
 	m_pixbuf(0),
 	m_display(0)
 {
 	setCamOrientation(-21.99*M_PI/180.0,-2.2*M_PI/180.0,2650.0);
+	//memset(m_points,0,sizeof(m_points));
+	for(int x=0; x<320; ++x) m_xlookupSD[x]=(2.0*x/(320-1)-1.0)*tan(0.5*m_hFOV);
+	for(int x=0; x<640; ++x) m_xlookupHD[x]=(2.0*x/(640-1)-1.0)*tan(0.5*m_hFOV);
+	for(int y=0; y<240; ++y) m_ylookupSD[y]=(2.0*y/(240-1)-1.0)*tan(0.5*m_vFOV);
+	for(int y=0; y<480; ++y) m_ylookupHD[y]=(2.0*y/(480-1)-1.0)*tan(0.5*m_vFOV);
 }
 
 PointcloudProcessor::~PointcloudProcessor() {
 	// TODO Auto-generated destructor stub
 }
 
-double PointcloudProcessor::pxToPoint(point_t *pt,int x, int y, uint16_t z) {
+bool PointcloudProcessor::objectDetected() const {
+	return objectFrames>=MIN_OBJ;
+}
+
+inline double PointcloudProcessor::pxToPoint(point_t *pt,int16_t x, int16_t y, uint16_t z) {
 	if(z==0||z>32767) {
 		pt->p.setZero();
 		pt->category=-1;
 		return NAN;
 	}
-	pt->p[0]=m_xlookup[x]*z;
-	pt->p[1]=m_ylookup[y]*z;
+	pt->p[0]=x;
+	pt->p[1]=y;
 	pt->p[2]=z;
 	pt->category=0;
 	return (pt->p.cast<double>().dot(m_floornormal))+m_camHeight;
@@ -52,6 +58,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	const size_t linesz=v.getStrideInBytes();
 	uint8_t * const dst_img=m_pixbuf?gdk_pixbuf_get_pixels(m_pixbuf):0;
 	const int dst_rowstride=m_pixbuf?gdk_pixbuf_get_rowstride(m_pixbuf):0;
+	int w=v.getVideoMode().getResolutionX();
+	int h=v.getVideoMode().getResolutionY();
 
 	PlaneEstimator floor;
 
@@ -59,18 +67,21 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	for(int y=0; y<h; ++y) {
 		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 				static_cast<const uint8_t *>(p_img)+y*linesz);
-		point_t *lineP=m_points+y*w;
 		for(int x=0; x<w; ++x) {
 
 			uint16_t z=line[w-x-1];
-			double d=pxToPoint(lineP+x,x,y,z);
+			double d;
+			if(w>320)
+				d=pxToPoint(&m_points[y][x],z*m_xlookupHD[x],z*m_ylookupHD[y],z);
+			else
+				d=pxToPoint(&m_points[y][x],z*m_xlookupSD[x],z*m_ylookupSD[y],z);
 			if(z) {
 				if(abs(d)<80.0) {
-					floor.addPoint(lineP[x].p);
-					lineP[x].category=1;
+					floor.addPoint(m_points[y][x].p);
+					m_points[y][x].category=1;
 				}
-				if(d>100.0 && d<1500.0)
-					lineP[x].category=2;
+				if(d>100.0 && d<1800.0)
+					m_points[y][x].category=2;
 			}
 		}
 	}
@@ -84,7 +95,10 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 		cam2robot.row(0)=z;
 		cam2robot.row(1)=m_floornormal.cross(z);
 		cam2robot.row(2)=m_floornormal;
-		z=cam2robot*Eigen::Vector3d(m_xlookup[0],m_ylookup[h-1],1.);
+		if(w>320)
+			z=cam2robot*Eigen::Vector3d(m_xlookupHD[0],m_ylookupHD[h-1],1.);
+		else
+			z=cam2robot*Eigen::Vector3d(m_xlookupSD[0],m_ylookupSD[h-1],1.);
 		m_maxAngle=z[1]/z[0];
 	}
 
@@ -95,11 +109,11 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	for(int y=0; y<h; ++y) {
 		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 				static_cast<const uint8_t *>(p_img)+y*linesz);
-		point_t *lineP=m_points+y*w;
 		for(int x=0; x<w; ++x) {
-			point_t *p=lineP+w-x-1;
-			p->p=(cam2robot*p->p.cast<double>()).cast<int16_t>();
+			point_t *p=&m_points[y][x];
 			if(p->category<=0) continue;
+			p->p=(cam2robot*p->p.cast<double>()).cast<int16_t>();
+			p->p[2]+=m_camHeight;
 			int i=(((double)p->p[1]/(double)p->p[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
 			if(i<0) i=0;
 			else if(i>=XHIST_RESOLUTION) i=XHIST_RESOLUTION-1;
@@ -115,9 +129,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	for(int y=0; y<h; ++y) {
 		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 				static_cast<const uint8_t *>(p_img)+y*linesz);
-		point_t *lineP=m_points+y*w;
 		for(int x=0; x<w; ++x) {
-			point_t *p=lineP+w-x-1;
+			point_t *p=&m_points[y][x];
 			if(p->category!=2) continue;
 			int i=(((double)p->p[1]/(double)p->p[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
 			if(i<0) i=0;
@@ -126,74 +139,100 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 			else ++numCandidates;
 		}
 	}
+	//std::cerr<<numCandidates<<'\n';
 
 #define MAX_BBOX 32
 	if(numCandidates>200) {
 		bbox_t bboxes[MAX_BBOX];
 		int numBbox=0;
 
-		for(int y=1; y<h-1; ++y) {
+		for(int y=h-2; y>0; --y) {
 			const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 					static_cast<const uint8_t *>(p_img)+y*linesz);
-			point_t *lineP=m_points+y*w;
 			for(int x=1; x<w-1; ++x) {
-				if(lineP[x].category!=2) continue;
-				if(lineP[x-1].category!=2 || lineP[x+1].category!=2) continue;
-				if(lineP[x-w].category!=2 || lineP[x+w].category!=2) continue;
+				if(m_points[y][x].category!=2) continue;
 				int b=numBbox;
 				for(int i=numBbox-1; i>=0; --i) {
-					if(x-2>bboxes[i].img_xmax || x+2<bboxes[i].img_xmin) continue;
-					if(y-2>bboxes[i].img_ymax || y+2<bboxes[i].img_ymin) continue;
+					if(x-3>bboxes[i].img_xmax || x+3<bboxes[i].img_xmin) continue;
+					if(y-3>bboxes[i].img_ymax || y+3<bboxes[i].img_ymin) continue;
 					b=i;
 					break;
 				}
 				if(b>=MAX_BBOX) break;
 				if(b==numBbox) {
+					if(m_points[y][x-1].category!=2 || m_points[y][x+1].category!=2) continue;
+					if(m_points[y-1][x].category!=2 || m_points[y+1][x].category!=2) continue;
 					++numBbox;
 					bboxes[b].img_xmax=x+1;
 					bboxes[b].img_xmin=x-1;
 					bboxes[b].img_ymax=y+1;
 					bboxes[b].img_ymin=y-1;
-					bboxes[b].xmin=bboxes[b].xmax=lineP[x].p[0];
-					bboxes[b].ymin=bboxes[b].ymax=lineP[x].p[1];
-					bboxes[b].zmin=bboxes[b].zmax=lineP[x].p[2];
+					bboxes[b].xmin=bboxes[b].xmax=m_points[y][x].p[0];
+					bboxes[b].ymin=bboxes[b].ymax=m_points[y][x].p[1];
+					bboxes[b].zmin=bboxes[b].zmax=m_points[y][x].p[2];
+					updateBbox(&bboxes[b],&m_points[y][x-1]);
+					updateBbox(&bboxes[b],&m_points[y][x+1]);
+					updateBbox(&bboxes[b],&m_points[y-1][x]);
+					updateBbox(&bboxes[b],&m_points[y+1][x]);
 				} else {
 					if(x>bboxes[b].img_xmax) bboxes[b].img_xmax=x;
 					if(x<bboxes[b].img_xmin) bboxes[b].img_xmin=x;
 					if(y>bboxes[b].img_ymax) bboxes[b].img_ymax=y;
 					if(y<bboxes[b].img_ymin) bboxes[b].img_ymin=y;
-					if(lineP[x].p[0]<bboxes[b].xmin) bboxes[b].xmin=lineP[x].p[0];
-					if(lineP[x].p[0]>bboxes[b].xmax) bboxes[b].xmax=lineP[x].p[0];
-					if(lineP[x].p[1]<bboxes[b].ymin) bboxes[b].ymin=lineP[x].p[1];
-					if(lineP[x].p[1]>bboxes[b].ymax) bboxes[b].ymax=lineP[x].p[1];
-					if(lineP[x].p[2]<bboxes[b].zmin) bboxes[b].zmin=lineP[x].p[2];
-					if(lineP[x].p[2]>bboxes[b].zmax) bboxes[b].zmax=lineP[x].p[2];
+					updateBbox(&bboxes[b],&m_points[y][x]);
 				}
 			}
 		}
-		int b=-1, bsize=0;
+		int b=-1;
+		int64_t bsize=0;
 		for(int i=0; i<numBbox; ++i) {
-			if(bboxes[i].zmin>180) continue;
+			if(bboxes[i].zmin>160) continue;
 			if(bboxes[i].zmax>1300) continue;
 			if((bboxes[i].ymax-bboxes[i].ymin)<300) continue;
 			if((bboxes[i].zmax-bboxes[i].zmin)<200) continue;
-			int sz=(int)(bboxes[i].ymax-bboxes[i].ymin)
-					* (int)(bboxes[i].zmax-bboxes[i].zmin);
+			if((bboxes[i].xmax-bboxes[i].xmin)<100) continue;
+			if((bboxes[i].ymax-bboxes[i].ymin)>1000) continue;
+			if((bboxes[i].xmax-bboxes[i].xmin)>1000) continue;
+			int64_t sz=(int64_t)(bboxes[i].ymax-bboxes[i].ymin)
+					* (int64_t)(bboxes[i].zmax-bboxes[i].zmin)
+					* (int64_t)(bboxes[i].xmax-bboxes[i].xmin);
 			if(sz>bsize) {
 				b=i;
 				bsize=sz;
 			}
 		}
-		if(b>=0) std::cerr<<bsize<<' '
-				<<(bboxes[b].xmax-bboxes[b].xmin)<<'x'
-				<<(bboxes[b].ymax-bboxes[b].ymin)<<'x'
-				<<(bboxes[b].zmax-bboxes[b].zmin)<<'\n';
+		if(b>=0) {
+
+			for(int y=bboxes[b].img_ymax+1;y<h;++y)
+				for(int x=bboxes[b].img_xmin-1;x<=bboxes[b].img_xmax+1;++x) {
+					if(m_points[y][x].category<0) continue;
+					if(m_points[y][x].p[2]<0) continue;
+					if(m_points[y][x].p[0]<bboxes[b].xmin-50
+							|| m_points[y][x].p[0]>bboxes[b].xmax+50) continue;
+					if(m_points[y][x].p[1]<bboxes[b].ymin-100
+							|| m_points[y][x].p[1]>bboxes[b].ymax+100) continue;
+					m_points[y][x].category=3;
+					//updateBbox(&bboxes[b],&m_points[y][x]);
+				}
+			for(int y=bboxes[b].img_ymin; y<=bboxes[b].img_ymax; ++y) {
+				for(int x=bboxes[b].img_xmin; x<=bboxes[b].img_xmax; ++x) {
+					if(m_points[y][x].category==2) m_points[y][x].category=3;
+				}
+			}
+			if(objectFrames<MIN_OBJ) ++objectFrames;
+			else
+			std::cerr<<bsize<<' '
+					<<(bboxes[b].xmax-bboxes[b].xmin)<<'x'
+					<<(bboxes[b].ymax-bboxes[b].ymin)<<'x'
+					<<(bboxes[b].zmax-bboxes[b].zmin)<<'\n';
+		} else {
+			objectFrames=0;
+		}
 	}
 	if(m_pixbuf) {
 		for(int y=0; y<h; ++y) {
 			const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 					static_cast<const uint8_t *>(p_img)+y*linesz);
-			point_t *lineP=m_points+y*w;
 			uint8_t *dst_val=dst_img+y*dst_rowstride;
 			for(int x=0; x<w; ++x) {
 				uint16_t z=line[w-x-1];
@@ -202,7 +241,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 				else if(z<DIST_MIN) g=255;
 				else g=255-((unsigned int)z-DIST_MIN)
 						*255U/(DIST_MAX-DIST_MIN);
-				switch(lineP[x].category) {
+				switch(m_points[y][x].category) {
 				case -1:
 					dst_val[0]=0; dst_val[1]=0; dst_val[2]=0;
 					break;
@@ -210,6 +249,9 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 					dst_val[0]=0; dst_val[1]=0; dst_val[2]=g;
 					break;
 				case 2:
+					dst_val[0]=g; dst_val[1]=g; dst_val[2]=0;
+					break;
+				case 3:
 					dst_val[0]=g; dst_val[1]=0; dst_val[2]=0;
 					break;
 				default:
@@ -240,19 +282,6 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 void PointcloudProcessor::readStreamInfo(openni::VideoStream& v) {
 	m_hFOV=v.getHorizontalFieldOfView();
 	m_vFOV=v.getVerticalFieldOfView();
-	w=v.getVideoMode().getResolutionX();
-	h=v.getVideoMode().getResolutionY();
-	if(m_display) gtk_widget_set_size_request(m_display,w,h);
-	if(m_pixbuf) g_free(m_pixbuf);
-	m_pixbuf=gdk_pixbuf_new(GDK_COLORSPACE_RGB,false,8,w,h);
-	if(m_pointsAlloc < (size_t)(w*h)) {
-		m_points=static_cast<point_t*>(realloc(m_points,w*h*sizeof(point_t)));
-		m_pointsAlloc=w*h;
-	}
-	m_xlookup=static_cast<double*>(realloc(m_xlookup,w*sizeof(double)));
-	m_ylookup=static_cast<double*>(realloc(m_ylookup,h*sizeof(double)));
-	for(int x=0; x<w; ++x) m_xlookup[x]=(2.0*x/(w-1)-1.0)*tan(0.5*m_hFOV);
-	for(int y=0; y<h; ++y) m_ylookup[y]=(2.0*y/(h-1)-1.0)*tan(0.5*m_vFOV);
 }
 
 void PointcloudProcessor::setCamOrientation(double upTilt, double rightTilt,
@@ -293,13 +322,25 @@ void PointcloudProcessor::setDisplay(GtkWidget* display) {
 	}
 	m_display=display;
 
+	if(m_pixbuf) g_free(m_pixbuf);
+	m_pixbuf=gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, 640,480);
+
 	m_prev_app_paintable=gtk_widget_get_app_paintable(m_display);
 	m_prev_double_buffered=gtk_widget_get_double_buffered(m_display);
 	gtk_widget_get_size_request(m_display,&m_prev_sizerq_w,&m_prev_sizerq_h);
 
-	gtk_widget_set_size_request(m_display,w,h);
+	gtk_widget_set_size_request(m_display,640,480);
 	gtk_widget_set_app_paintable(m_display,TRUE);
 	gtk_widget_set_double_buffered(m_display,FALSE);
 	m_sighandler=g_signal_connect(G_OBJECT(m_display),"expose_event",
 			G_CALLBACK(expose_event_callback),m_pixbuf);
+}
+
+inline void PointcloudProcessor::updateBbox(bbox_t* b, const point_t* p) {
+	if(p->p[0]<b->xmin) b->xmin=p->p[0];
+	if(p->p[0]>b->xmax) b->xmax=p->p[0];
+	if(p->p[1]<b->ymin) b->ymin=p->p[1];
+	if(p->p[1]>b->ymax) b->ymax=p->p[1];
+	if(p->p[2]<b->zmin) b->zmin=p->p[2];
+	if(p->p[2]>b->zmax) b->zmax=p->p[2];
 }
