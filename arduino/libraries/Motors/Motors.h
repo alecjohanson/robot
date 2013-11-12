@@ -26,7 +26,7 @@ int _encoder_value ;
 
 
 float _speed_instruction ;
-float _speed ;
+volatile float _speed ;
 
 float _error ;
 float _int;
@@ -58,7 +58,8 @@ void Set_speed(int u);
  * 		@ float Te : 		 sampling period, in seconds
  * 		@ int16_t deltaStep : 	 encoder difference
  */
-void Speed_regulation(float W, float Te, int16_t deltaStep);
+void Speed_regulation(float W, float Te);
+void calculateSpeed(float Te, int16_t deltaStep);
 
 /*
  * Motors::Read_Current
