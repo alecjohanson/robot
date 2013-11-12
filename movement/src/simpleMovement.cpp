@@ -1,3 +1,15 @@
+/**************************************************
+*
+* This expects a message of type Movement with a boolean 
+*	of if we are turning or not and a magnitude
+*
+* This should take a single Movement message and execute it fully.
+* There is no checks to see if other nodes are trying to move the robot as well
+*
+* Name of the topics should be double checked.
+* I have not tested this AT ALL yet.
+*
+**************************************************/
 #include <iostream>
 #include <ros/ros.h>
 #include <sharps/Distance.h>
@@ -13,7 +25,9 @@ static ros::Publisher speed_pub;
 static ros::Publisher movement_completed_publisher;
 static ros::Subscriber subscriber;
 static ros::Subscriber odom_sub;
-
+//----------------------------
+// CONSTANTS
+//----------------------------
 double const MAX_SPEED = 6;
 double const MIN_SPEED = 1;
 double const MAX_TURN_SPEED = MAX_SPEED;
