@@ -36,11 +36,13 @@ install_manifest.txt
 .project
 .settings/
 .csettings/
+.pydevproject
 
 # ros generated #
 #################
 msg_gen/
 srv_gen/
+_*.py
 
 # vim stuff #
 #############

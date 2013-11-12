@@ -1,18 +1,17 @@
 <package>
-  <description brief="robot007">
+  <description brief="logic">
 
-     robot007
+     logic
 
   </description>
   <author>robo</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/robot007</url>
+  <url>http://ros.org/wiki/logic</url>
   <depend package="roscpp"/>
   <depend package="differential_drive"/>
   <depend package="sharps"/>
   <depend package="movement"/>
-
 </package>
 
 

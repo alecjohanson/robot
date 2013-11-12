@@ -75,7 +75,7 @@ void NewNode(){
 	newNode.setOrientation(orientation);
 	addNodeDirection();
 	nodes.push_back(newNode);
-	std::cerr << name <<' ';
+	std::cerr << "New node "<< name <<' ';
 	for(int i=0; i<6; ++i) std::cerr<<type[i]<<' ';
 	std::cerr<<orientation<< std::endl;
 }
@@ -174,7 +174,7 @@ void followWall(int wall){
 	spd.W2 = w2;
 	spd.header.stamp = ros::Time::now();
 	cmd_pub.publish(spd);
-	std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
+	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
 }
 
 //ask the robot to advance
@@ -216,6 +216,8 @@ void newState (const sharps::Distance &msg){
 		type[i]=newtype;
 	}
 
+	if(movementState==TURN) return;
+
 	if(movementState!=INIT && sameState) {
 		switch(movementState) {
 		case FOLLOW_L:
@@ -248,8 +250,8 @@ int main(int argc, char** argv)
 {
 	ros::init(argc, argv, "Logic");
 	ros::NodeHandle nh;
-	ros::Publisher cmd_pub =  nh.advertise<differential_drive::Speed>("/motion/Speed", 1);
-	ros::Publisher cmd_move =  nh.advertise<movement::Movement>("/simpleMovement/move",1);
+	cmd_pub =  nh.advertise<differential_drive::Speed>("/motion/Speed", 1);
+	cmd_move =  nh.advertise<movement::Movement>("/simpleMovement/move",1);
 	sharps_sub = nh.subscribe("/sharps/Distance/",1,newState);
 	move_complete_sub = nh.subscribe("/simpleMovement/moveCompleted",1,movementCompletedHandler);
 
