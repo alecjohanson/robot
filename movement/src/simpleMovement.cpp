@@ -1,18 +1,17 @@
 /**************************************************
-*
-* This expects a message of type Movement with a boolean 
-*	of if we are turning or not and a magnitude
-*
-* This should take a single Movement message and execute it fully.
-* There is no checks to see if other nodes are trying to move the robot as well
-*
-* Name of the topics should be double checked.
-* I have not tested this AT ALL yet.
-*
-**************************************************/
+ *
+ * This expects a message of type Movement with a boolean
+ *	of if we are turning or not and a magnitude
+ *
+ * This should take a single Movement message and execute it fully.
+ * There is no checks to see if other nodes are trying to move the robot as well
+ *
+ * Name of the topics should be double checked.
+ * I have not tested this AT ALL yet.
+ *
+ **************************************************/
 #include <iostream>
 #include <ros/ros.h>
-#include <sharps/Distance.h>
 #include <differential_drive/Speed.h>
 #include <differential_drive/Odometry.h>
 #include <cmath>
@@ -53,21 +52,24 @@ double calcWheelSpeed(double distanceFromEndPoint, bool turn);
 void finalize();
 void executeMovement(const differential_drive::Odometry &msg);
 
+movement::Movement currentMovement;
+
 void move(const movement::Movement &msg)
 {
-    reset();
-    turn = msg.turn;
-    magnitude = msg.magnitude;
-    state=INIT;
+	reset();
+	turn = msg.turn;
+	magnitude = msg.magnitude;
+	state=INIT;
+	currentMovement=msg;
 }
 
 void reset()
 {
-    initialX = 0;
-    initialY = 0;
-    previousTheta = 0;
-    angleTraveled = 0;
-    magnitude = 0;
+	initialX = 0;
+	initialY = 0;
+	previousTheta = 0;
+	angleTraveled = 0;
+	magnitude = 0;
 }
 
 void odometryHandler(const differential_drive::Odometry &msg)
@@ -88,115 +90,114 @@ void odometryHandler(const differential_drive::Odometry &msg)
 
 void executeMovement(const differential_drive::Odometry &msg)
 {
-    differential_drive::Speed spd;
-    double w1Speed;
-    double w2Speed;
+	differential_drive::Speed spd;
+	double w1Speed;
+	double w2Speed;
 
-    if (turn)
-    {
-        //This is done this way so > 2pi can be achieved if weirdly desired
-        angleTraveled += msg.theta - previousTheta;
-        previousTheta = msg.theta;
-	double wheelSpeed;
-	double angleToEndPoint=0.0;
-        if ((magnitude > 0 && angleTraveled > magnitude)
-            || (magnitude < 0 && angleTraveled < magnitude))
-        {
-            finalize();
-		wheelSpeed=0.0;
-        } else {
-		//Set wheel speeds to keep turning
-		angleToEndPoint = std::min(abs(angleTraveled),abs(magnitude - angleTraveled));
-		wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
+	if (turn)
+	{
+		//This is done this way so > 2pi can be achieved if weirdly desired
+		angleTraveled += msg.theta - previousTheta;
+		previousTheta = msg.theta;
+		double wheelSpeed;
+		double angleToEndPoint=0.0;
+		if ((magnitude > 0 && angleTraveled > magnitude)
+				|| (magnitude < 0 && angleTraveled < magnitude))
+		{
+			finalize();
+			wheelSpeed=0.0;
+		} else {
+			//Set wheel speeds to keep turning
+			angleToEndPoint = std::min(abs(angleTraveled),abs(magnitude - angleTraveled));
+			wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
+		}
+
+		if (angleTraveled > magnitude)
+		{
+			w1Speed = -wheelSpeed;
+			w2Speed = wheelSpeed;
+		}
+		else
+		{
+			w1Speed = wheelSpeed;
+			w2Speed = -wheelSpeed;
+		}
+		cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
+	}
+	else //Move strait
+	{
+		//Check Distance traveled
+		//TODO:: maybe put in checks to make sure theta stays the same
+		double distance = hypot(initialX-msg.x,initialY-msg.y);
+		if (distance > magnitude)
+		{
+			finalize();
+			w1Speed=0.0;
+		} else {
+			//Calc wheel speeds
+			double distanceToAnEndPoint = (distance < (magnitude - distance)) ?
+					distance : magnitude - distance;
+			w1Speed = calcWheelSpeed(distanceToAnEndPoint, false);
+		}
+		cerr<<distance<<' '<<w1Speed<<endl;
+		w2Speed=w1Speed;
 	}
 
-        if (angleTraveled > magnitude)
-        {
-            w1Speed = -wheelSpeed;
-            w2Speed = wheelSpeed;
-        }
-        else
-        {
-            w1Speed = wheelSpeed;
-            w2Speed = -wheelSpeed;
-        }
-	cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
-    }
-    else //Move strait
-    {
-        //Check Distance traveled
-        //TODO:: maybe put in checks to make sure theta stays the same
-        double distance = hypot(initialX-msg.x,initialY-msg.y);
-        if (distance > magnitude)
-        {
-            finalize();
-		w1Speed=0.0;
-        } else {
-		//Calc wheel speeds
-		double distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
-		                              distance : magnitude - distance;
-		w1Speed = calcWheelSpeed(distanceToAnEndPoint, false);
-	}
-	cerr<<distance<<' '<<w1Speed<<endl;
-	w2Speed=w1Speed;
-    }
-
-    spd.W1 = w1Speed;
-    spd.W2 = w2Speed;
-    spd.header.stamp = ros::Time::now();
-    speed_pub.publish(spd);
+	spd.W1 = w1Speed;
+	spd.W2 = w2Speed;
+	spd.header.stamp = ros::Time::now();
+	speed_pub.publish(spd);
 
 }
 
 void finalize()
 {
-     //Stop subscribing and wasting the calculation saying we are finished
-    state=STBY;
-    //TODO::Advertise we are done?
-    //Completed the movement
-    //movement_completed_publisher.publish(msg);
+	//Stop subscribing and wasting the calculation saying we are finished
+	state=STBY;
+	//Completed the movement
+	movement_completed_publisher.publish(currentMovement);
 }
 
 
 double calcWheelSpeed(double distanceFromEndPoint, bool turn)
 {
-/*
+	/*
 double const MAX_SPEED = (1.0/0.05);
 double const MIN_SPEED = (0.1/0.05);
 double const MAX_TURN_SPEED = (MAX_SPEED*0.5);
 double const MIN_TURN_SPEED = (MIN_SPEED*0.8);
 double const ACCEL_RANGE_LIN 0.1;
 double const ACCEL_RANGE_ROT (M_PI*0.25);
-*/
-    if (turn)
-    {
-	if(distanceFromEndPoint>ACCEL_RANGE_ROT) return MAX_TURN_SPEED;
-	else return MIN_TURN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_ROT)*(MAX_TURN_SPEED-MIN_TURN_SPEED);
-    }
-    else
-    {
-	if(distanceFromEndPoint>ACCEL_RANGE_LIN) return MAX_SPEED;
-	else return MIN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_LIN)*(MAX_SPEED-MIN_SPEED);
-    }
+	 */
+	if (turn)
+	{
+		if(distanceFromEndPoint>ACCEL_RANGE_ROT) return MAX_TURN_SPEED;
+		else return MIN_TURN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_ROT)*(MAX_TURN_SPEED-MIN_TURN_SPEED);
+	}
+	else
+	{
+		if(distanceFromEndPoint>ACCEL_RANGE_LIN) return MAX_SPEED;
+		else return MIN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_LIN)*(MAX_SPEED-MIN_SPEED);
+	}
 }
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "controller");
-    ros::NodeHandle nh;
+	ros::init(argc, argv, "controller");
+	ros::NodeHandle nh;
 
-    speed_pub = nh.advertise<differential_drive::Speed>("/motion/Speed",1);
-    movement_completed_publisher = nh.advertise<movement::Movement>("/simpleMovement/moveCompleted",1);
-    move_sub=nh.subscribe("/IRtest/movement",1,move);
-    odom_sub=nh.subscribe("/motion/Odometry",1,odometryHandler);
+	speed_pub = nh.advertise<differential_drive::Speed>("/motion/Speed",1);
+	movement_completed_publisher = nh.advertise<movement::Movement>("/simpleMovement/moveCompleted",1);
+	move_sub=nh.subscribe("/simpleMovement/move",1,move);
+	odom_sub=nh.subscribe("/motion/Odometry",1,odometryHandler);
 
-    ros::Rate loop_rate(100);
+	ros::Rate loop_rate(100);
 
-    while(ros::ok())
-    {
-        loop_rate.sleep();
-        ros::spinOnce();
-    }
+	while(ros::ok())
+	{
+		loop_rate.sleep();
+		ros::spinOnce();
+	}
 
-    return 0;
+	return 0;
 }
