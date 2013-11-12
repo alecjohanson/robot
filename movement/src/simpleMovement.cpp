@@ -58,17 +58,17 @@ void reset()
 
 void odometryHandler(const differential_drive::Odometry &msg)
 {
-	switch(state) {
-	case STBY: return;
-	case INIT:
-		initialX = msg.x;
-		initialY = msg.y;
-		previousTheta = msg.theta;
-		state=MOVING;
-		break;
-	case MOVING:
-		executeMovement(msg);
-		break;
+    switch(state) {
+        case STBY: return;
+        case INIT:
+            initialX = msg.x;
+            initialY = msg.y;
+            previousTheta = msg.theta;
+            state=MOVING;
+            break;
+        case MOVING:
+            executeMovement(msg);
+            break;
 	}
 }
 
@@ -80,21 +80,21 @@ void executeMovement(const differential_drive::Odometry &msg)
 
     if (turn)
     {
-        //This is done this way so > 2pi can be achieved if weirdly desired
+        //This is done this way so > 2pi can be achieved if desired
         angleTraveled += msg.theta - previousTheta;
         previousTheta = msg.theta;
-	double wheelSpeed;
-	double angleToEndPoint=0.0;
+        double wheelSpeed;
+        double angleToEndPoint=0.0;
         if ((magnitude > 0 && angleTraveled > magnitude)
             || (magnitude < 0 && angleTraveled < magnitude))
         {
             finalize();
-		wheelSpeed=0.0;
+            wheelSpeed=0.0;
         } else {
-		//Set wheel speeds to keep turning
-		angleToEndPoint = std::min(abs(angleTraveled),abs(magnitude - angleTraveled));
-		wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
-	}
+            //Set wheel speeds to keep turning
+            angleToEndPoint = std::min(abs(angleTraveled),abs(magnitude - angleTraveled));
+            wheelSpeed = calcWheelSpeed(angleToEndPoint, true);
+        }
 
         if (angleTraveled > magnitude)
         {
@@ -106,7 +106,7 @@ void executeMovement(const differential_drive::Odometry &msg)
             w1Speed = wheelSpeed;
             w2Speed = -wheelSpeed;
         }
-	cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
+        cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
     }
     else //Move strait
     {
@@ -116,15 +116,15 @@ void executeMovement(const differential_drive::Odometry &msg)
         if (distance > magnitude)
         {
             finalize();
-		w1Speed=0.0;
+            w1Speed=0.0;
         } else {
-		//Calc wheel speeds
-		double distanceToAnEndPoint = (distance < (magnitude - distance)) ? 
-		                              distance : magnitude - distance;
-		w1Speed = calcWheelSpeed(distanceToAnEndPoint, false);
-	}
-	cerr<<distance<<' '<<w1Speed<<endl;
-	w2Speed=w1Speed;
+            //Calc wheel speeds
+            double distanceToAnEndPoint = (distance < (magnitude - distance)) ?
+                                          distance : magnitude - distance;
+            w1Speed = calcWheelSpeed(distanceToAnEndPoint, false);
+        }
+        cerr<<distance<<' '<<w1Speed<<endl;
+        w2Speed=w1Speed;
     }
 
     spd.W1 = w1Speed;
@@ -156,13 +156,13 @@ double const ACCEL_RANGE_ROT (M_PI*0.25);
 */
     if (turn)
     {
-	if(distanceFromEndPoint>ACCEL_RANGE_ROT) return MAX_TURN_SPEED;
-	else return MIN_TURN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_ROT)*(MAX_TURN_SPEED-MIN_TURN_SPEED);
+        if(distanceFromEndPoint>ACCEL_RANGE_ROT) return MAX_TURN_SPEED;
+        else return MIN_TURN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_ROT)*(MAX_TURN_SPEED-MIN_TURN_SPEED);
     }
     else
     {
-	if(distanceFromEndPoint>ACCEL_RANGE_LIN) return MAX_SPEED;
-	else return MIN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_LIN)*(MAX_SPEED-MIN_SPEED);
+        if(distanceFromEndPoint>ACCEL_RANGE_LIN) return MAX_SPEED;
+        else return MIN_SPEED+(distanceFromEndPoint/ACCEL_RANGE_LIN)*(MAX_SPEED-MIN_SPEED);
     }
 }
 
