@@ -44,7 +44,7 @@ const double Sharp2Edge_RearD = 4.62;           // distance from sharp ch3 to ed
 const double Sharp2Edge_FrontD = 0;          // sharp ch2 to edge
 
 // Max distance to show
-const double MaxDist = 20;
+const double MaxDist = 25.;
 //double SensorData;
 //double params[4];
 //double [] parameters;
