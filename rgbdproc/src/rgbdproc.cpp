@@ -6,7 +6,9 @@
  */
 
 #include <iostream>
-#include <ros/ros.h>
+#ifndef NO_ROS
+	#include <ros/ros.h>
+#endif
 #include "RGBDSource.h"
 #include "MainWindow.h"
 #include <OpenNI.h>
@@ -14,10 +16,6 @@
 #include <gtk/gtk.h>
 #include "PointcloudProcessor.h"
 #include "PixbufConverter.h"
-
-#define RES_X 320
-#define RES_Y 240
-#define FPS 30
 
 openni::Recorder rec;
 
@@ -63,7 +61,9 @@ int main(int argc, char **argv) {
 
 	atexit(exitHandler);
 
+#ifndef NO_ROS
 	ros::init(argc,argv,"rgbdproc");
+#endif
 
     if(have_gui) {
     	if(!g_thread_supported()) {
@@ -112,7 +112,11 @@ int main(int argc, char **argv) {
 	depth.start();
 	//rgbd.startStreams();
 	bool objectmode=false;
+#ifndef NO_ROS
 	while(ros::ok()){
+#else
+	while(1) {
+#endif
 		if(have_gui) {
 			GDK_THREADS_ENTER();
 			while(gtk_events_pending()) gtk_main_iteration();
@@ -145,7 +149,9 @@ int main(int argc, char **argv) {
 		}
 		cframe.release();*/
 		dframe.release();
+#ifndef NO_ROS
 		ros::spinOnce();
+#endif
 	}
 	return 0;
 }
