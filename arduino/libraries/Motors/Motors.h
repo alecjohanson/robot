@@ -13,25 +13,15 @@ class Motors{
 public:
 float _k ;
 float _ki ;
+float _int;
 int _int_max ;
+volatile float _speed ;
+float _nlin_slope, _nlin_intercept;
 char _dir_pin ;
 char _pwm_pin ;
 char _brk_pin ;
 char _cfb_pin ;
 int _ticks_per_rev ;
-
-int _encoder_value_old ;
-int _encoder_value ;
-
-
-
-float _speed_instruction ;
-volatile float _speed ;
-
-float _error ;
-float _int;
-
-float _nlin_slope, _nlin_intercept;
 
 Motors(char dir_pin,char pwm_pin,char brk_pin,char cfb_pin);
 ~Motors(void);
