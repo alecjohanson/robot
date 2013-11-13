@@ -1,5 +1,6 @@
 # Binaries #
 ############
+*.pyc
 *.com
 *.class
 *.dll
@@ -34,11 +35,14 @@ install_manifest.txt
 .cproject
 .project
 .settings/
+.csettings/
+.pydevproject
 
 # ros generated #
 #################
 msg_gen/
 srv_gen/
+_*.py
 
 # vim stuff #
 #############

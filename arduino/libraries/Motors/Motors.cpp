@@ -12,7 +12,16 @@
 #include <Motors.h>
 
 /* Constructor */
-Motors::Motors(char dir_pin,char pwm_pin,char brk_pin,char cfb_pin)	{
+Motors::Motors(char dir_pin,char pwm_pin,char brk_pin,char cfb_pin):
+	_int_max(30.),
+	_int(0.),
+	_k(12.),
+	_ki(5.),
+	_nlin_intercept(59.),
+	_nlin_slope(0.64),
+	_speed(0.),
+	_ticks_per_rev(360)
+{
 	_dir_pin = dir_pin ;
 	_pwm_pin = pwm_pin ;
 	_brk_pin = brk_pin ;
@@ -68,11 +77,9 @@ void Motors::Set_speed(int u)	{
  * parameters >
  * 		@ float W : 		 desired speed, rad/s
  * 		@ float Te : 		 sampling period, in seconds
- * 		@ int16_t deltaStep : 	 encoder difference
  */
-void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
-	_speed = deltaStep*2.*M_PI/(_ticks_per_rev*Te);
-	_error = W - _speed;
+void Motors::Speed_regulation(float W, float Te) {
+	float _error = W - _speed;
 	_int+= _error*Te;
 
 	if(_int>_int_max) {_int = _int_max;}
@@ -90,6 +97,14 @@ void Motors::Speed_regulation(float W, float Te, int16_t deltaStep) {
 	if(W<0.0) digitalWrite(_dir_pin, LOW);
 	else digitalWrite(_dir_pin, HIGH);
 	analogWrite(_pwm_pin,pwm);
+}
+
+/*
+ * parameters >
+ * 		@ int16_t deltaStep : 	 encoder difference
+ */
+void Motors::calculateSpeed(float Te, int16_t deltaStep) {
+	_speed = deltaStep*2.*M_PI/(_ticks_per_rev*Te);
 }
 
 /*
