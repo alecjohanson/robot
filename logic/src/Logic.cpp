@@ -25,6 +25,17 @@ static double sharpsDistance [6]; //distance in each sharps
 //static bool turning=false;//to tell if the robot is turning or not
 //static int initialize=1;//to tell if we are initializing
 
+
+//distance threshold for each sharp
+static const double sharpsThresholds[6]={
+		10., //f
+		22.,
+		22.,
+		17., //r
+		22.,
+		22.
+};
+
 typedef enum{
 	INIT=0,
 	FOLLOW_L,
@@ -51,9 +62,20 @@ void setState(movementState_t s) {
 }
 
 // returns if there is a wall or not
-int exists(double q){
-	int exists=0; if (q<10) exists=1;
-	return exists;}
+/*
+int exists(double q,int i){
+	int exists=0;
+	if (q<10.) {exists=1;}
+	if (q<22. && i!=0 && i!=3) {exists=1;}
+	return exists;
+}
+*/
+
+int normalizeAngle(int angle) {
+	angle=(angle+180)%360;
+	if(angle<0) angle=360+angle;
+	return angle-180;
+}
 
 
 //looking at the actual sharps, give the directions to explore
@@ -61,9 +83,9 @@ void addNodeDirection(){
 	exploreNode_t n;
 	n.nodeIdx=name;
 	n.direction=0;
-	if((type[1]==0)&&(type[2]==0)) {n.direction=-90; listExplore.push_back(n);}
-	if((type[4]==0)&&(type[5]==0)) {n.direction=90; listExplore.push_back(n);}
-	if (type[0]==0) {n.direction=0; listExplore.push_back(n);}
+	if((type[1]==0)&&(type[2]==0)) {n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);}
+	if((type[4]==0)&&(type[5]==0)) {n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);}
+	if (type[0]==0) {n.direction=normalizeAngle(orientation); listExplore.push_back(n);}
 }
 
 
@@ -75,9 +97,9 @@ void NewNode(){
 	newNode.setOrientation(orientation);
 	addNodeDirection();
 	nodes.push_back(newNode);
-	std::cerr << "New node "<< name <<' ';
+	std::cerr << "New node "<< name <<' '<<" state "<<' ';
 	for(int i=0; i<6; ++i) std::cerr<<type[i]<<' ';
-	std::cerr<<orientation<< std::endl;
+	std::cerr << "orientation "<<orientation<< std::endl;
 }
 
 
@@ -114,9 +136,9 @@ void followWall(int wall){
 	const double IR_rightD = 16.2;		// distance between ch4 and ch8.
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
 	const double Wheel2Wall_D = 5; 		// distance from the wheel to a wall.
-	const double k_theta = 15;			// Control coefficient --> Ask GB.
+	const double k_theta = 8;			// Control coefficient --> Ask GB.
 	const double RobotSpeed = 5;		// Constant speed of the robot.
-	const double MaxFowardAngle = 0.08;	// Max angle where the robot is allowed to move forward in radians.
+	const double MaxFowardAngle = 0.14;	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
 		setState(FOLLOW_R);
@@ -178,12 +200,25 @@ void followWall(int wall){
 }
 
 //ask the robot to advance
+/*
 void Advance(){
 	if (type[4]+type[5]==2) {followWall(-1);}
 	else if (type[1]+type[2]==2) {followWall(1);}
 	else goAhead();
 }
-
+*/
+void Advance(){
+	if (type[4]+type[5]==2) {
+		if (type[1]+type[2]!=2) {followWall(-1);}
+		else {
+			if (sharpsDistance[4]+sharpsDistance[5]<=sharpsDistance[1]+sharpsDistance[2])
+			{followWall(-1);}
+			else followWall(1);
+		}
+	}
+	else {if (type[1]+type[2]==2) {followWall(1);}
+		  else goAhead();}
+}
 
 //ask the robot to move
 void Move(){
@@ -194,7 +229,7 @@ void Move(){
 	exploreNode_t goal = listExplore.back();
 	listExplore.pop_back();
 	//we'll make milestone 2 later
-	int angle=goal.direction-orientation; orientation=goal.direction;
+	int angle=normalizeAngle(goal.direction-orientation); orientation=goal.direction;
 	if(angle) Rotate(angle);
 	else Advance();
 }
@@ -210,8 +245,9 @@ void newState (const sharps::Distance &msg){
 	sharpsDistance[5]=msg.front_l;
 
 	bool sameState=true;
+
 	for(int i=0; i<6; ++i) {
-		int newtype=exists(sharpsDistance[i]);
+		int newtype=(sharpsDistance[i]<sharpsThresholds[i])?1:0;
 		if(newtype!=type[i]) sameState=false;
 		type[i]=newtype;
 	}
