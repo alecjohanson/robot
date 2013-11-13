@@ -14,6 +14,8 @@
 #include <stdint.h>
 
 PointcloudProcessor::PointcloudProcessor() :
+	s_depth(0),
+	s_color(0),
 	m_pointsAlloc(0),
 	m_hFOV(57.7*M_PI/180.0),
 	m_vFOV(45.0*M_PI/180.0),
@@ -51,15 +53,15 @@ inline double PointcloudProcessor::pxToPoint(point_t *pt,int16_t x, int16_t y, u
 	return (pt->p.cast<double>().dot(m_floornormal))+m_camHeight;
 }
 
-void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
+void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrameRef& c) {
 	if(!m_points) return;
 
-	const void * const p_img=v.getData();
-	const size_t linesz=v.getStrideInBytes();
+	const void * const p_img=d.getData();
+	const size_t linesz=d.getStrideInBytes();
 	uint8_t * const dst_img=m_pixbuf?gdk_pixbuf_get_pixels(m_pixbuf):0;
 	const int dst_rowstride=m_pixbuf?gdk_pixbuf_get_rowstride(m_pixbuf):0;
-	int w=v.getVideoMode().getResolutionX();
-	int h=v.getVideoMode().getResolutionY();
+	int w=d.getVideoMode().getResolutionX();
+	int h=d.getVideoMode().getResolutionY();
 
 	PlaneEstimator floor;
 
@@ -142,6 +144,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	//std::cerr<<numCandidates<<'\n';
 
 #define MAX_BBOX 32
+	bbox_t finalBbox={0,0,0,0,0,0,0,0,0,0};
 	if(numCandidates>200) {
 		bbox_t bboxes[MAX_BBOX];
 		int numBbox=0;
@@ -221,19 +224,40 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 			}
 			if(objectFrames<MIN_OBJ) ++objectFrames;
 			else
-			std::cerr<<bsize<<' '
-					<<(bboxes[b].xmax-bboxes[b].xmin)<<'x'
-					<<(bboxes[b].ymax-bboxes[b].ymin)<<'x'
-					<<(bboxes[b].zmax-bboxes[b].zmin)<<'\n';
+				finalBbox=bboxes[b];
+
 		} else {
 			objectFrames=0;
 		}
+	}
+	if(finalBbox.img_ymax) {
+		std::cerr
+			<<(finalBbox.xmax-finalBbox.xmin)<<'x'
+			<<(finalBbox.ymax-finalBbox.ymin)<<'x'
+			<<(finalBbox.zmax-finalBbox.zmin)<<"; "
+			<<finalBbox.img_xmin<<'|'<<finalBbox.img_ymin<<" : "
+			<<finalBbox.img_xmax<<'|'<<finalBbox.img_ymax<<" : "<<'\n';
 	}
 	if(m_pixbuf) {
 		for(int y=0; y<h; ++y) {
 			const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 					static_cast<const uint8_t *>(p_img)+y*linesz);
 			uint8_t *dst_val=dst_img+y*dst_rowstride;
+			if(c.isValid() && finalBbox.img_ymax) {
+				const uint8_t *colorLine=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes();
+				for(int x=0; x<w; ++x) {
+					if(y<finalBbox.img_ymin || y>finalBbox.img_ymax
+							|| x<finalBbox.img_xmin || x>finalBbox.img_xmax) {
+						dst_val[0]=0; dst_val[1]=0; dst_val[2]=0;
+					} else {
+						dst_val[0]=colorLine[0];
+						dst_val[1]=colorLine[2];
+						dst_val[2]=colorLine[3];
+					}
+					dst_val+=3;
+					colorLine+=3;
+				}
+			} else
 			for(int x=0; x<w; ++x) {
 				uint16_t z=line[w-x-1];
 				uint8_t g;
@@ -262,15 +286,6 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 			}
 		}
 	}
-	/*
-	 * Now find a point cluster:
-	 * -points above floor level
-	 * -maximum height 150mm over floor
-	 * -surrounded (left, right, bottom) by floor
-	 * -more than 75% valid points
-	 * -maximum BBox width 200mm
-	 * -minimum BBox width, height: 30mm?
-	 */
 
 	if(m_display) {
 		gdk_threads_enter();
@@ -279,9 +294,11 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& v) {
 	}
 }
 
-void PointcloudProcessor::readStreamInfo(openni::VideoStream& v) {
-	m_hFOV=v.getHorizontalFieldOfView();
-	m_vFOV=v.getVerticalFieldOfView();
+void PointcloudProcessor::readStreamInfo(openni::VideoStream& d, openni::VideoStream& c) {
+	m_hFOV=d.getHorizontalFieldOfView();
+	m_vFOV=d.getVerticalFieldOfView();
+	s_depth=&d;
+	s_color=&c;
 }
 
 void PointcloudProcessor::setCamOrientation(double upTilt, double rightTilt,

@@ -84,15 +84,15 @@ int main(int argc, char **argv) {
 		rgbd.getDevice().getPlaybackControl()->setRepeatEnabled(true);
 		rgbd.getDevice().getPlaybackControl()->setSpeed(1.0);
 	} else {
-		rgbd.setVideoMode(openni::SENSOR_DEPTH,RES_X,RES_Y,30,
+		rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,
 				openni::PIXEL_FORMAT_DEPTH_100_UM);
-		/*rgbd.setVideoMode(openni::SENSOR_COLOR,RES_X,RES_Y,30,
-				openni::PIXEL_FORMAT_RGB888);*/
+		rgbd.setVideoMode(openni::SENSOR_COLOR,640,480,30,
+				openni::PIXEL_FORMAT_RGB888);
 	}
-	//openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
+	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
 	openni::VideoStream& depth=rgbd.getVideoStream(openni::SENSOR_DEPTH);
 	PointcloudProcessor pconv;
-	pconv.readStreamInfo(depth);
+	pconv.readStreamInfo(depth,color);
 	//PixbufConverter *pbcolor, *pbdepth;
 	if(have_gui) {
 		pconv.setDisplay(mainwin->getGtkImage(0,0));
@@ -105,11 +105,12 @@ int main(int argc, char **argv) {
 	}
 	if(f_record) {
 		rec.create(f_record);
-		//rec.attach(color,false);
+		rec.attach(color,false);
 		rec.attach(depth,false);
 		rec.start();
 	}
-	rgbd.startStreams();
+	depth.start();
+	//rgbd.startStreams();
 	bool objectmode=false;
 	while(ros::ok()){
 		if(have_gui) {
@@ -117,18 +118,20 @@ int main(int argc, char **argv) {
 			while(gtk_events_pending()) gtk_main_iteration();
 			GDK_THREADS_LEAVE();
 		}
-//		openni::VideoFrameRef cframe;
+		openni::VideoFrameRef cframe;
 		openni::VideoFrameRef dframe;
 		depth.readFrame(&dframe);
-//		color.readFrame(&cframe);
-		pconv.onNewFrame(dframe);
+		if(objectmode) color.readFrame(&cframe);
+		pconv.onNewFrame(dframe,cframe);
 		if(!rgbd.getDevice().isFile() && pconv.objectDetected()!=objectmode) {
-			if(objectmode)
-				rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,
-								openni::PIXEL_FORMAT_DEPTH_100_UM);
-			else
-				rgbd.setVideoMode(openni::SENSOR_DEPTH,640,480,30,
-								openni::PIXEL_FORMAT_DEPTH_100_UM);
+			if(objectmode) {
+				rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
+				color.start();
+			} else {
+				rgbd.setVideoMode(openni::SENSOR_DEPTH,640,480,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
+				color.stop();
+				if(cframe.isValid()) cframe.release();
+			}
 			objectmode=!objectmode;
 		}
 /*		while((int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp()>500000/FPS) {

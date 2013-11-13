@@ -15,8 +15,8 @@ class PointcloudProcessor {
 public:
 	PointcloudProcessor();
 	~PointcloudProcessor();
-	void onNewFrame(openni::VideoFrameRef&);
-	void readStreamInfo(openni::VideoStream&);
+	void onNewFrame(openni::VideoFrameRef&, openni::VideoFrameRef&);
+	void readStreamInfo(openni::VideoStream&, openni::VideoStream&);
 	void setDisplay(GtkWidget *);
 	typedef struct {
 		double upTilt;
@@ -27,6 +27,7 @@ public:
 	camOrientation_t getCamOrientation();
 	bool objectDetected() const;
 private:
+	openni::VideoStream *s_depth, *s_color;
 	typedef struct {
 		Eigen::Matrix<int16_t,3,1> p;
 		int16_t category;
