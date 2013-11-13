@@ -230,59 +230,86 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 			objectFrames=0;
 		}
 	}
+	struct {
+		int x1,x2,y1,y2;
+	} color_bbox;
 	if(finalBbox.img_ymax) {
+		Eigen::Matrix3d robot2cam=cam2robot.inverse();
+		Eigen::Vector3d c;
+		c=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
+		openni::CoordinateConverter::convertDepthToColor(
+				*s_depth,*s_color,
+				finalBbox.img_xmin,finalBbox.img_ymin,lrint((double)c[2]),
+				&color_bbox.x1, &color_bbox.y1);
+		c=robot2cam*Eigen::Vector3d(finalBbox.xmin,finalBbox.ymin,finalBbox.zmin-m_camHeight);
+		openni::CoordinateConverter::convertDepthToColor(
+				*s_depth,*s_color,
+				finalBbox.img_xmax,finalBbox.img_ymax,lrint((double)c[2]),
+				&color_bbox.x2, &color_bbox.y2);
 		std::cerr
 			<<(finalBbox.xmax-finalBbox.xmin)<<'x'
 			<<(finalBbox.ymax-finalBbox.ymin)<<'x'
 			<<(finalBbox.zmax-finalBbox.zmin)<<"; "
-			<<finalBbox.img_xmin<<'|'<<finalBbox.img_ymin<<" : "
-			<<finalBbox.img_xmax<<'|'<<finalBbox.img_ymax<<" : "<<'\n';
+			<<color_bbox.x1<<'|'<<color_bbox.y1<<" : "
+			<<color_bbox.x2<<'|'<<color_bbox.y2<<" : "<<'\n';
+		color_bbox.x1-=20;
+		color_bbox.y1-=10;
+		color_bbox.x2+=20;
+		color_bbox.y2+=20;
 	}
 	if(m_pixbuf) {
-		for(int y=0; y<h; ++y) {
-			const uint16_t * const line=reinterpret_cast<const uint16_t *>(
-					static_cast<const uint8_t *>(p_img)+y*linesz);
-			uint8_t *dst_val=dst_img+y*dst_rowstride;
-			if(c.isValid() && finalBbox.img_ymax) {
-				const uint8_t *colorLine=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes();
+		if(1 && c.isValid() && finalBbox.img_ymax) {
+			for(int y=0; y<h; ++y) {
+				const uint16_t * const line=reinterpret_cast<const uint16_t *>(
+						static_cast<const uint8_t *>(p_img)+y*linesz);
+				uint8_t *dst_val=dst_img+y*dst_rowstride;
+				const uint8_t *colorLine=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes()+3*w-3;
 				for(int x=0; x<w; ++x) {
-					if(y<finalBbox.img_ymin || y>finalBbox.img_ymax
-							|| x<finalBbox.img_xmin || x>finalBbox.img_xmax) {
-						dst_val[0]=0; dst_val[1]=0; dst_val[2]=0;
+					if(y<color_bbox.y1 || y>color_bbox.y2
+							|| x<color_bbox.x1 || x>color_bbox.x2) {
+						dst_val[0]=colorLine[0]/2;
+						dst_val[1]=colorLine[1]/2;
+						dst_val[2]=colorLine[2]/2;
 					} else {
 						dst_val[0]=colorLine[0];
-						dst_val[1]=colorLine[2];
-						dst_val[2]=colorLine[3];
+						dst_val[1]=colorLine[1];
+						dst_val[2]=colorLine[2];
 					}
 					dst_val+=3;
-					colorLine+=3;
+					colorLine-=3;
 				}
-			} else
-			for(int x=0; x<w; ++x) {
-				uint16_t z=line[w-x-1];
-				uint8_t g;
-				if(z>DIST_MAX) g=0;
-				else if(z<DIST_MIN) g=255;
-				else g=255-((unsigned int)z-DIST_MIN)
-						*255U/(DIST_MAX-DIST_MIN);
-				switch(m_points[y][x].category) {
-				case -1:
-					dst_val[0]=0; dst_val[1]=0; dst_val[2]=0;
-					break;
-				case 1:
-					dst_val[0]=0; dst_val[1]=0; dst_val[2]=g;
-					break;
-				case 2:
-					dst_val[0]=g; dst_val[1]=g; dst_val[2]=0;
-					break;
-				case 3:
-					dst_val[0]=g; dst_val[1]=0; dst_val[2]=0;
-					break;
-				default:
-					dst_val[0]=g; dst_val[1]=g; dst_val[2]=g;
-					break;
+			}
+		} else {
+			for(int y=0; y<h; ++y) {
+				const uint16_t * const line=reinterpret_cast<const uint16_t *>(
+						static_cast<const uint8_t *>(p_img)+y*linesz);
+				uint8_t *dst_val=dst_img+y*dst_rowstride;
+				for(int x=0; x<w; ++x) {
+					uint16_t z=line[w-x-1];
+					uint8_t g;
+					if(z>DIST_MAX) g=0;
+					else if(z<DIST_MIN) g=255;
+					else g=255-((unsigned int)z-DIST_MIN)
+							*255U/(DIST_MAX-DIST_MIN);
+					switch(m_points[y][x].category) {
+					case -1:
+						dst_val[0]=0; dst_val[1]=0; dst_val[2]=0;
+						break;
+					case 1:
+						dst_val[0]=0; dst_val[1]=0; dst_val[2]=g;
+						break;
+					case 2:
+						dst_val[0]=g; dst_val[1]=g; dst_val[2]=0;
+						break;
+					case 3:
+						dst_val[0]=g; dst_val[1]=0; dst_val[2]=0;
+						break;
+					default:
+						dst_val[0]=g; dst_val[1]=g; dst_val[2]=g;
+						break;
+					}
+					dst_val+=3;
 				}
-				dst_val+=3;
 			}
 		}
 	}

@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 	} else {
 		rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,
 				openni::PIXEL_FORMAT_DEPTH_100_UM);
-		rgbd.setVideoMode(openni::SENSOR_COLOR,640,480,30,
+		rgbd.setVideoMode(openni::SENSOR_COLOR,320,240,30,
 				openni::PIXEL_FORMAT_RGB888);
 	}
 	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
 		rec.start();
 	}
 	depth.start();
-	//rgbd.startStreams();
+	rgbd.startStreams();
 	bool objectmode=false;
 #ifndef NO_ROS
 	while(ros::ok()){
@@ -124,17 +124,16 @@ int main(int argc, char **argv) {
 		}
 		openni::VideoFrameRef cframe;
 		openni::VideoFrameRef dframe;
+		if(!rgbd.getDevice().isFile() && objectmode) color.readFrame(&cframe);
 		depth.readFrame(&dframe);
-		if(objectmode) color.readFrame(&cframe);
 		pconv.onNewFrame(dframe,cframe);
 		if(!rgbd.getDevice().isFile() && pconv.objectDetected()!=objectmode) {
 			if(objectmode) {
-				rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
-				color.start();
+				//rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
+				//color.stop();
 			} else {
-				rgbd.setVideoMode(openni::SENSOR_DEPTH,640,480,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
-				color.stop();
-				if(cframe.isValid()) cframe.release();
+				//rgbd.setVideoMode(openni::SENSOR_DEPTH,640,480,30,openni::PIXEL_FORMAT_DEPTH_100_UM);
+				//color.start();
 			}
 			objectmode=!objectmode;
 		}
@@ -148,6 +147,8 @@ int main(int argc, char **argv) {
 		std::cerr << (int64_t)dframe.getTimestamp()-(int64_t)cframe.getTimestamp() << std::endl;
 		}
 		cframe.release();*/
+		//if(cframe.isValid())
+			cframe.release();
 		dframe.release();
 #ifndef NO_ROS
 		ros::spinOnce();
