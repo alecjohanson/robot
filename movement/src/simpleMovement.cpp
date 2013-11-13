@@ -125,7 +125,7 @@ void executeMovement(const differential_drive::Odometry &msg)
 			w1Speed = wheelSpeed;
 			w2Speed = -wheelSpeed;
 		}
-		cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
+		//cerr<<angleTraveled*180./M_PI<<' '<<angleToEndPoint*180./M_PI<<' '<<w1Speed<<endl;
 	}
 	else //Move strait
 	{
