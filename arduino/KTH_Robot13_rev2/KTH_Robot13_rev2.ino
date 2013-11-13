@@ -318,6 +318,9 @@ static void updateOdometry(void) {
 
 	//calculate odometry
 	theta+= V_rot*Te;
+	if(theta>0.5*M_PI) theta-=M_PI;
+	if(theta<-0.5*M_PI) theta+=M_PI;
+
 	x+= V_lin*Te*cos(theta);
 	y+= V_lin*Te*sin(theta);
 
