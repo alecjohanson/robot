@@ -12,60 +12,24 @@
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
+#include "NoiseReducer.h"
 
-using namespace std;
-
-//--------------------------------
-//   CONSTANTS
-//--------------------------------
-static const int NUMBER_OF_NODES_TO_CHECK = 4;
-static const double PERCENT_OF_MAXES_NEEDED = .9;
-static const double THRESHOLD = 10;
-//////////////////////////////////////////
-//Use these for analyzing state of the list
-int numMaxesInList=0;
-static double totalInList;
-/////////////////////////////////////
-
-void updateList(double val);
-void initialize();
-
-struct Node
-{
-  double value;
-  Node *child;
-  bool null;
-};
-
-static Node *topNode; //Added most recent 
-static Node *bottomNode; //Oldest, to be removed next
-static int numNodesInList;
-
-int main(int arc, char** argv)
-{
-      initialize();
-      int i =0;
-      while(i<15)
-      {
-        i++;
-        cerr << "i = " << i << "\n";
-        updateList(i);
-        cerr << "Total in list = " << totalInList << "\n";
-        cerr << "Num Maxes in List = " << numMaxesInList << "\n";
-      }
-      return 0;
-}
-
-
-void initialize()
+void NoiseReducer::initialize()
 {
   topNode = new Node;
   bottomNode = new Node;
   topNode->null = true;
   bottomNode->null = true;
+  //Default Parameters
+  NUMBER_OF_NODES_TO_CHECK = 4;
+  PERCENT_OF_MAXES_NEEDED = .9;
+  THRESHOLD = 10;
+  //Initializing vals
+  numMaxesInList = 0;
+  totalInList=0;
 }
 
-void updateList(double val)
+void NoiseReducer::updateList(double val)
 {
   totalInList += val;
   if (val > THRESHOLD)
