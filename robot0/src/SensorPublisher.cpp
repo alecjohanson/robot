@@ -39,6 +39,7 @@ void getDistance(const differential_drive::AnalogC &msg){
   RearSensor = alpha_5 / (RearSensor+beta_5) - Sharp2Edge_RearD;
   FrontSensor = alpha_6 / (FrontSensor+beta_6) - Sharp2Edge_FrontD;
 
+
   // Debugg output
   // std::cerr<<'Front Right '<<FrontRightSensor<<std::endl;
   // std::cerr<<'Rear Right  '<<RearRightSensor<<std::endl;

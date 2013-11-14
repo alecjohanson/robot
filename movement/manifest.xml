@@ -1,0 +1,16 @@
+<package>
+  <description brief="movement">
+
+     movement
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <depend package="roscpp"/>
+  <depend package="differential_drive"/>
+  <url>http://ros.org/wiki/movement</url>
+
+</package>
+
+

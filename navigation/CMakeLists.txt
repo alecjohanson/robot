@@ -17,7 +17,7 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #uncomment if you have defined messages
-rosbuild_genmsg()
+#rosbuild_genmsg()
 #uncomment if you have defined services
 #rosbuild_gensrv()
 
@@ -26,8 +26,6 @@ rosbuild_genmsg()
 #target_link_libraries(${PROJECT_NAME} another_library)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
-#rosbuild_add_executable(milestone0 milestone0.cpp)
-rosbuild_add_executable(testwall src/IRtest.cpp)
-rosbuild_add_executable(sharps src/SensorPublisher.cpp)
+#rosbuild_add_executable(example examples/example.cpp)
 rosbuild_add_executable(navtest src/navigation.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
