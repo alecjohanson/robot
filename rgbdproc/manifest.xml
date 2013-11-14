@@ -1,15 +1,19 @@
 <package>
-  <description brief="rgbdproc">
+	<description brief="rgbdproc">
 
-     rgbdproc
+		rgbdproc
 
-  </description>
-  <author>robo</author>
-  <license>BSD</license>
-  <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/rgbdproc</url>
-  <depend package="roslib"/>
-  <depend package="roscpp"/>
+	</description>
+	<author>robo</author>
+	<license>BSD</license>
+	<review status="unreviewed" notes="" />
+	<url>http://ros.org/wiki/rgbdproc</url>
+	<depend package="roslib" />
+	<depend package="roscpp" />
+	<depend package="sensor_msgs" />
+	<depend package="opencv2" />
+	<depend package="cv_bridge" />
+	<depend package="image_transport" />
 
 </package>
 

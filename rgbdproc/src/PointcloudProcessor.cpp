@@ -12,6 +12,11 @@
 #include "PlaneEstimator.h"
 #include <iostream>
 #include <stdint.h>
+#ifndef NO_ROS
+	#include <sensor_msgs/Image.h>
+	#include <sensor_msgs/image_encodings.h>
+	#include <sensor_msgs/PointCloud2.h>
+#endif
 
 PointcloudProcessor::PointcloudProcessor() :
 	s_depth(0),
@@ -30,6 +35,12 @@ PointcloudProcessor::PointcloudProcessor() :
 	for(int x=0; x<640; ++x) m_xlookupHD[x]=(2.0*x/(640-1)-1.0)*tan(0.5*m_hFOV);
 	for(int y=0; y<240; ++y) m_ylookupSD[y]=(2.0*y/(240-1)-1.0)*tan(0.5*m_vFOV);
 	for(int y=0; y<480; ++y) m_ylookupHD[y]=(2.0*y/(480-1)-1.0)*tan(0.5*m_vFOV);
+#ifndef NO_ROS
+	ros::NodeHandle nh;
+	pub_img=nh.advertise<sensor_msgs::Image>("objdetect/images",1);
+	pub_pointcloud=nh.advertise<sensor_msgs::PointCloud2>("objdetect/pointclouds",1);
+#endif
+
 }
 
 PointcloudProcessor::~PointcloudProcessor() {
@@ -206,6 +217,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		}
 		if(b>=0) {
 
+			finalBbox=bboxes[b];
 			for(int y=bboxes[b].img_ymax+1;y<h;++y)
 				for(int x=bboxes[b].img_xmin-1;x<=bboxes[b].img_xmax+1;++x) {
 					if(m_points[y][x].category<0) continue;
@@ -215,17 +227,20 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 					if(m_points[y][x].p[1]<bboxes[b].ymin-100
 							|| m_points[y][x].p[1]>bboxes[b].ymax+100) continue;
 					m_points[y][x].category=3;
-					//updateBbox(&bboxes[b],&m_points[y][x]);
+					updateBbox(&finalBbox,&m_points[y][x]);
+					if(y>finalBbox.img_ymax) finalBbox.img_ymax=y;
+					if(x>finalBbox.img_xmax) finalBbox.img_xmax=x;
+					if(x<finalBbox.img_xmin) finalBbox.img_xmin=x;
 				}
-			for(int y=bboxes[b].img_ymin; y<=bboxes[b].img_ymax; ++y) {
-				for(int x=bboxes[b].img_xmin; x<=bboxes[b].img_xmax; ++x) {
+			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
+				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
 					if(m_points[y][x].category==2) m_points[y][x].category=3;
 				}
 			}
-			if(objectFrames<MIN_OBJ) ++objectFrames;
-			else
-				finalBbox=bboxes[b];
-
+			if(objectFrames<MIN_OBJ) {
+				++objectFrames;
+				finalBbox.img_ymax=0;
+			}
 		} else {
 			objectFrames=0;
 		}
@@ -235,16 +250,16 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 	} color_bbox;
 	if(finalBbox.img_ymax) {
 		Eigen::Matrix3d robot2cam=cam2robot.inverse();
-		Eigen::Vector3d c;
-		c=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
+		Eigen::Vector3d corner;
+		corner=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
 		openni::CoordinateConverter::convertDepthToColor(
 				*s_depth,*s_color,
-				finalBbox.img_xmin,finalBbox.img_ymin,lrint((double)c[2]),
+				finalBbox.img_xmin,finalBbox.img_ymin,lrint((double)corner[2]),
 				&color_bbox.x1, &color_bbox.y1);
-		c=robot2cam*Eigen::Vector3d(finalBbox.xmin,finalBbox.ymin,finalBbox.zmin-m_camHeight);
+		corner=robot2cam*Eigen::Vector3d(finalBbox.xmin,finalBbox.ymin,finalBbox.zmin-m_camHeight);
 		openni::CoordinateConverter::convertDepthToColor(
 				*s_depth,*s_color,
-				finalBbox.img_xmax,finalBbox.img_ymax,lrint((double)c[2]),
+				finalBbox.img_xmax,finalBbox.img_ymax,lrint((double)corner[2]),
 				&color_bbox.x2, &color_bbox.y2);
 		std::cerr
 			<<(finalBbox.xmax-finalBbox.xmin)<<'x'
@@ -252,10 +267,48 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 			<<(finalBbox.zmax-finalBbox.zmin)<<"; "
 			<<color_bbox.x1<<'|'<<color_bbox.y1<<" : "
 			<<color_bbox.x2<<'|'<<color_bbox.y2<<" : "<<'\n';
-		color_bbox.x1-=20;
-		color_bbox.y1-=10;
-		color_bbox.x2+=20;
-		color_bbox.y2+=20;
+#ifndef NO_ROS
+		if(pub_img.getNumSubscribers()>0){//send color images
+			color_bbox.x1-=20;
+			color_bbox.y1-=10;
+			color_bbox.x2+=20;
+			color_bbox.y2+=20;
+			if(color_bbox.x1<0) color_bbox.x1=0;
+			if(color_bbox.y1<0) color_bbox.y1=0;
+			if(color_bbox.x2>=w) color_bbox.x2=w-1;
+			if(color_bbox.y2>=h) color_bbox.y2=h-1;
+			sensor_msgs::Image msg_img;
+			msg_img.header.stamp=ros::Time::now();
+			msg_img.height=color_bbox.y2-color_bbox.y1;
+			msg_img.width=color_bbox.x2-color_bbox.x1;
+			msg_img.encoding=sensor_msgs::image_encodings::RGB8;
+			msg_img.is_bigendian=0;
+			msg_img.step=msg_img.width*3;
+			msg_img.data.reserve(msg_img.step*msg_img.height);
+			for(int y=color_bbox.y1; y<=color_bbox.y2; ++y) {
+				const uint8_t *cpx=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes()+3*(w-color_bbox.x1-1);
+				for(int x=color_bbox.x1; x<=color_bbox.x2; ++x) {
+					msg_img.data.push_back(*cpx--);
+					msg_img.data.push_back(*cpx--);
+					msg_img.data.push_back(*cpx--);
+				}
+			}
+			pub_img.publish(msg_img);
+		}
+		if(pub_pointcloud.getNumSubscribers()>0) {
+			sensor_msgs::PointCloud2 msg_pcl;
+			msg_pcl.header.stamp=ros::Time::now();
+			//todo fill in point cloud
+			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
+				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
+					if(m_points[y][x].category==3) {
+
+					}
+				}
+			}
+			pub_pointcloud.publish(msg_pcl);
+		}
+#endif
 	}
 	if(m_pixbuf) {
 		if(1 && c.isValid() && finalBbox.img_ymax) {

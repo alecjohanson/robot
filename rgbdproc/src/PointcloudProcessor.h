@@ -10,6 +10,9 @@
 
 #include <Eigen/Core>
 #include <gtk/gtk.h>
+#ifndef NO_ROS
+	#include <ros/ros.h>
+#endif
 
 class PointcloudProcessor {
 public:
@@ -57,6 +60,10 @@ private:
 	gulong m_sighandler;
 	static const unsigned int DIST_MIN=3000, DIST_MAX=14000;
 	static const int MIN_OBJ=3;
+
+	#ifndef NO_ROS
+	ros::Publisher pub_img, pub_pointcloud;
+	#endif
 
 	double pxToPoint(point_t *pt,int16_t x, int16_t y, uint16_t z);
 	void updateBbox(bbox_t *b, const point_t *p);
