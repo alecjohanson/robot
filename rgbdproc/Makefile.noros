@@ -1,0 +1,20 @@
+CC = g++
+CXXFLAGS=-I/home/robo/OpenNI-Linux-x64-2.2/Include -march=native -mfpmath=sse -DNO_ROS
+LDFLAGS=-L/home/robo/OpenNI-Linux-x64-2.2/Redist -lOpenNI2
+CXXFLAGS+=$(shell pkg-config --cflags gtk+-2.0)
+LDFLAGS+=$(shell pkg-config --libs gtk+-2.0)
+CXXFLAGS+=$(shell pkg-config --cflags eigen3)
+LDFLAGS+=$(shell pkg-config --libs eigen3)
+CSRC=$(wildcard src/*.cpp)
+OBJ=$(patsubst src/%.cpp, obj/%.o, $(CSRC))
+
+all: bin/rgbdproc-noros
+
+bin/rgbdproc-noros: $(OBJ)
+	c++ -O2 -g -pthread $^ -rdynamic $(LDFLAGS) -Wl,-rpath,/home/robo/OpenNI-Linux-x64-2.2/Redist -o $@
+
+obj/%.o: src/%.cpp
+	mkdir -p obj/
+	c++ -O2 -g $(CXXFLAGS) -o $@ -c $<
+
+.PHONY: all
