@@ -1,6 +1,5 @@
 #ifndef NOISEREDUCER_H
 #define NOISEREDUCER_H
-#endif
 
 struct Node
 {
@@ -30,6 +29,4 @@ struct NoiseReducer
     int numMaxesInList;
     double totalInList;
 };
-
-
-
+#endif

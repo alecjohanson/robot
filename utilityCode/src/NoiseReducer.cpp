@@ -67,3 +67,7 @@ double NoiseReducer::getAverage()
   return totalInList/numNodesInList;
 }
 
+int main (int argc, char** argv)
+{
+	return 0;
+}
