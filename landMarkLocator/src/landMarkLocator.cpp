@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 #include <stdio.h>
 #include <iostream>
-#include "utilityCode/NoiseReducer.h"
+#include "utilityCode/src/NoiseReducer.h"
 #include <tgmath.h>
 
 //----------------------------

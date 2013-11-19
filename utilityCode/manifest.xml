@@ -7,6 +7,7 @@
   <author>robo</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
+  <depend package="roscpp"/>
   <url>http://ros.org/wiki/utilityCode</url>
 
 </package>

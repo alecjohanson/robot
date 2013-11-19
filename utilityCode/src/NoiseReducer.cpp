@@ -44,7 +44,6 @@ void NoiseReducer::updateList(double val)
     return;
   }
   //We always want to add this to the front/
-  Node temp;
   topNode->child = newNode;
   topNode = newNode;
 
@@ -63,7 +62,7 @@ void NoiseReducer::updateList(double val)
   bottomNode = bottomNode->child;
 }
 
-double getAverage()
+double NoiseReducer::getAverage()
 {
   return totalInList/numNodesInList;
 }

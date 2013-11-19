@@ -19,7 +19,7 @@ struct NoiseReducer
   //Functions
     void initialize();
     void updateList(double val);
-    void getAverage();
+    double getAverage();
 
   //Parameters //Set to default values in NoiseReducer.cpp
     int NUMBER_OF_NODES_TO_CHECK;
