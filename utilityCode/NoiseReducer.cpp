@@ -62,3 +62,9 @@ void NoiseReducer::updateList(double val)
   //Remove bottom node
   bottomNode = bottomNode->child;
 }
+
+double getAverage()
+{
+  return totalInList/numNodesInList;
+}
+
