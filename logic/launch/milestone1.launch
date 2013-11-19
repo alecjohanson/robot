@@ -3,4 +3,7 @@
     <node pkg="movement" name="simpleMovement" type="simpleMovement"/>
     <node pkg="rosserial_python" name="motors" type="serial_node.py" args="/dev/ttyACM0"/>
     <node pkg="logic" name="control" type="logic"/>
+    <node pkg="rgbdproc" name="vision" type="rgbdproc"/>
+    <node pkg="robot_talk" name="chatter" type="robot_talk"/>
+    <node pkg="rgbdproc" name="detection" type="objdetect" args="--object='/home/robo/object-images/pepper2.png'"/>
 </launch>

@@ -15,6 +15,8 @@
 #include <vector>
 #include <math.h>
 #include <sensor_msgs/Image.h>
+#include <std_msgs/Empty.h>
+#include <std_msgs/String.h>
 #include <string.h>
 
 #include <cv.h>
@@ -28,12 +30,13 @@
 #include <sensor_msgs/image_encodings.h>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <getopt.h>
-#include <sys/time.h>
+#include <time.h>
 
-static const int minHessian = 100;
+static const int minHessian = 200;
 
-//static ros::Publisher cmd_pub;
-static ros::Subscriber obj_sub;
+static ros::Publisher obj_pub;
+static ros::Publisher talk_pub;
+static image_transport::Subscriber obj_sub;
 //static ros::Subscriber enc_sub;
 
 int have_gui;
@@ -127,9 +130,7 @@ double DetectObject(const cv::Mat& scene_data) {
 	timespec tstart, tend;
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 
-	double Kmatch = 2;
-
-	cv::Mat img_scene;
+	double Kmatch = 5;
 
 	/* masking, maybe not a good idea ( it was not, at least not when
 	 * only trying to find the tomato! ) */
@@ -140,7 +141,12 @@ double DetectObject(const cv::Mat& scene_data) {
 	*/
 
 	// uncomment to not filter red
-	img_scene = scene_data;
+	cv::Mat img_hsv(scene_data.rows, scene_data.cols, CV_8UC3);
+	cv::cvtColor(scene_data,img_hsv,CV_RGB2HSV);
+	int from_to[]={2,0};
+	cv::Mat img_scene(img_hsv.rows, img_hsv.cols, CV_8UC1);
+	cv::mixChannels(&img_hsv,1,&img_scene,1,from_to,1);
+	//img_scene = scene_data;
 
 
 	/*if (!img_object.data || !img_scene.data) {
@@ -231,8 +237,8 @@ double DetectObject(const cv::Mat& scene_data) {
 	scene_corners.push_back (scene_corners[0]);
 
 	for(size_t i = 0; i < good_matches.size(); i++ ) {
-		double x = keypoints_scene[ good_matches[i].trainIdx ].pt.x;
-		double y = keypoints_scene[ good_matches[i].trainIdx ].pt.y;
+		//double x = keypoints_scene[ good_matches[i].trainIdx ].pt.x;
+		//double y = keypoints_scene[ good_matches[i].trainIdx ].pt.y;
 		//std::cerr <<i <<":: x:" << x << ", y:" << y << std::endl;
 
 
@@ -240,10 +246,11 @@ double DetectObject(const cv::Mat& scene_data) {
 			++confident_points_polygon;
 		}
 
-		if ((x>std::min(scene_corners[0].x,scene_corners[3].x)) && (x<std::max(scene_corners[1].x,scene_corners[2].x)) && \
+		/*if ((x>std::min(scene_corners[0].x,scene_corners[3].x)) && (x<std::max(scene_corners[1].x,scene_corners[2].x)) && \
 				(y>std::min(scene_corners[0].y,scene_corners[1].y)) && (y<std::max(scene_corners[2].y,scene_corners[3].y))){
 			++confident_points_rectangle;		
 		}
+		*/
 	}
 	/*
 	std::cerr <<scene_corners[0].x <<":"<<scene_corners[0].y << std::endl;
@@ -274,35 +281,50 @@ double DetectObject(const cv::Mat& scene_data) {
 		cv::imshow( "matches", img_matches );
 	}
 
-	std::cerr <<"Rectangle: "<< double(confident_points_rectangle)/double(good_matches.size()) << std::endl;
-	std::cerr <<"Polygon: "<< double(confident_points_polygon)/double(good_matches.size()) << std::endl;
-
-	return double(confident_points_polygon)/double(good_matches.size());
+	//std::cerr <<"Rectangle: "<< double(confident_points_rectangle)/double(good_matches.size()) << std::endl;
+	//std::cerr <<"Polygon: "<< double(confident_points_polygon)/double(good_matches.size()) << std::endl;
+	double p=double(confident_points_polygon)/double(good_matches.size());
+	return p;
 }
 
 
-void DetectObjectHandler(const sensor_msgs::Image &msg) {
+void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
 	// convert from ros message to opencv image
-	/*cv_bridge::CvImagePtr cv_ptr;
+	cv_bridge::CvImageConstPtr cv_ptr;
+	static int w=1;
 	try
 	{
-		cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
+		cv_ptr = cv_bridge::toCvShare(img, img->encoding);
 	}
 	catch (cv_bridge::Exception& e)
 	{
 		ROS_ERROR("cv_bridge exception: %s", e.what());
 		return;
 	}
-	char *object_file = "images/1_tomato_small.jpg";
-	char *scene_file = "images/2_tomato_large.jpg";
+	//cv::namedWindow("matches", CV_WINDOW_NORMAL);
+	//cv::imshow( "matches", cv_ptr->image );
+	if(w==0) {
+	    std::vector<int> compression_params;
+	    compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+	    compression_params.push_back(9);
+		cv::imwrite("/home/robo/object-images/pepper2.png",cv_ptr->image,compression_params);
+		w=1;
+	}
 
-	cv::Mat img_object = cv::imread ( object_file,1);
-	cv::Mat img_scene  = cv::imread ( scene_file,1);
-	double res = DetectObject(img_object,cv_ptr);
-	 */
-
-
-
+	static double p=0.0;
+	static double alpha=0.6;
+	p=alpha*DetectObject(cv_ptr->image)+(1.-alpha)*p;
+	std::cerr<<"Confidence: "<<p*100.<<"%\n";
+	if(p>0.50) {
+		//todo send message to stop the robot
+		std_msgs::Empty nothing;
+		obj_pub.publish(nothing);
+		std::cout<<"Object detected: PEPPER\n";
+		std_msgs::String something;
+		something.data="Patrick, I found a pepper.";
+		talk_pub.publish(something);
+		exit(0);
+	}
 }
 
 
@@ -312,7 +334,7 @@ int main(int argc, char** argv)
 	const char *object_file=0, *scene_file=0;
     int option_index = 0;
     while(1) {
-    	int c = getopt_long (argc, argv, "abc:d:f:",
+    	int c = getopt_long (argc, argv, "o:t:g",
     			long_options, &option_index);
     	if(c == -1) break;
     	switch (c) {
@@ -324,6 +346,9 @@ int main(int argc, char** argv)
     		break;
     	case 't':
     		scene_file=optarg;
+    		break;
+    	case 'g':
+    		have_gui=1;
     		break;
     	case '?':
     		break;
@@ -340,9 +365,13 @@ int main(int argc, char** argv)
 	timespec tstart, tend;
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	{ //read reference file
-		cv::Mat img_object = cv::imread ( object_file,1);
-		//cv::Mat mask_object = redFilter(img_object);
-		//img_object&=mask_object;
+		cv::Mat img_in = cv::imread ( object_file,1);
+		//cv::Mat mask_object = redFilter(tmp_object);
+		cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
+		cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
+		int from_to[]={2,0};
+		cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
+		cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
 		object.w=img_object.cols;
 		object.h=img_object.rows;
 		cv::SurfFeatureDetector detector (minHessian);
@@ -358,16 +387,20 @@ int main(int argc, char** argv)
 	if(scene_file) {
 		cv::Mat img_scene  = cv::imread ( scene_file,1);
 		double res = DetectObject(img_scene);
-		std::cerr << res*100<<"% match\n";
 		if(have_gui) cv::waitKey(0);
+		return 0;
 	} else {
-		obj_sub = nh.subscribe("objdetect/images",1,DetectObjectHandler);
+		image_transport::ImageTransport it(nh);
+		obj_sub=it.subscribe("objdetect/images",1,DetectObjectHandler);
+		obj_pub=nh.advertise<std_msgs::Empty>("objdetect/spotted",1,false);
+		talk_pub=nh.advertise<std_msgs::String>("robot/talk",1,false);
 	}
 
 	ros::Rate loop_rate(100);
 	while(ros::ok()) {
 		loop_rate.sleep();
 		ros::spinOnce();
+		if(have_gui) cv::waitKey(1);
 	}
 
 	return 0;

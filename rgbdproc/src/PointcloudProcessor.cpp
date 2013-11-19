@@ -248,7 +248,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 	struct {
 		int x1,x2,y1,y2;
 	} color_bbox;
-	if(finalBbox.img_ymax) {
+	if(finalBbox.img_ymax && c.isValid()) {
 		Eigen::Matrix3d robot2cam=cam2robot.inverse();
 		Eigen::Vector3d corner;
 		corner=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
@@ -267,30 +267,39 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 			<<(finalBbox.zmax-finalBbox.zmin)<<"; "
 			<<color_bbox.x1<<'|'<<color_bbox.y1<<" : "
 			<<color_bbox.x2<<'|'<<color_bbox.y2<<" : "<<'\n';
+		color_bbox.x1-=80;
+		color_bbox.y1-=30;
+		color_bbox.x2+=10;
+		color_bbox.y2+=10;
+		int cw=c.getVideoMode().getResolutionX();
+		int ch=c.getVideoMode().getResolutionY();
+		/*if(cw>w) {
+			color_bbox.x1*=2;
+			color_bbox.x2*=2;
+			color_bbox.y1*=2;
+			color_bbox.y2*=2;
+		}*/
+		if(color_bbox.x1<0) color_bbox.x1=0;
+		if(color_bbox.y1<0) color_bbox.y1=0;
+		if(color_bbox.x2>=cw) color_bbox.x2=cw-1;
+		if(color_bbox.y2>=ch) color_bbox.y2=ch-1;
 #ifndef NO_ROS
 		if(pub_img.getNumSubscribers()>0){//send color images
-			color_bbox.x1-=20;
-			color_bbox.y1-=10;
-			color_bbox.x2+=20;
-			color_bbox.y2+=20;
-			if(color_bbox.x1<0) color_bbox.x1=0;
-			if(color_bbox.y1<0) color_bbox.y1=0;
-			if(color_bbox.x2>=w) color_bbox.x2=w-1;
-			if(color_bbox.y2>=h) color_bbox.y2=h-1;
 			sensor_msgs::Image msg_img;
 			msg_img.header.stamp=ros::Time::now();
-			msg_img.height=color_bbox.y2-color_bbox.y1;
-			msg_img.width=color_bbox.x2-color_bbox.x1;
+			msg_img.height=1+color_bbox.y2-color_bbox.y1;
+			msg_img.width=1+color_bbox.x2-color_bbox.x1;
 			msg_img.encoding=sensor_msgs::image_encodings::RGB8;
 			msg_img.is_bigendian=0;
 			msg_img.step=msg_img.width*3;
-			msg_img.data.reserve(msg_img.step*msg_img.height);
+			msg_img.data.reserve(msg_img.step*msg_img.height*3);
 			for(int y=color_bbox.y1; y<=color_bbox.y2; ++y) {
-				const uint8_t *cpx=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes()+3*(w-color_bbox.x1-1);
+				const uint8_t *cpx=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes()+3*(cw-color_bbox.x1-1);
 				for(int x=color_bbox.x1; x<=color_bbox.x2; ++x) {
-					msg_img.data.push_back(*cpx--);
-					msg_img.data.push_back(*cpx--);
-					msg_img.data.push_back(*cpx--);
+					msg_img.data.push_back(cpx[2]);
+					msg_img.data.push_back(cpx[1]);
+					msg_img.data.push_back(cpx[0]);
+					cpx-=3;
 				}
 			}
 			pub_img.publish(msg_img);
@@ -311,7 +320,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 #endif
 	}
 	if(m_pixbuf) {
-		if(1 && c.isValid() && finalBbox.img_ymax) {
+		if(c.isValid() && finalBbox.img_ymax) {
 			for(int y=0; y<h; ++y) {
 				const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 						static_cast<const uint8_t *>(p_img)+y*linesz);
@@ -426,7 +435,7 @@ void PointcloudProcessor::setDisplay(GtkWidget* display) {
 	m_prev_double_buffered=gtk_widget_get_double_buffered(m_display);
 	gtk_widget_get_size_request(m_display,&m_prev_sizerq_w,&m_prev_sizerq_h);
 
-	gtk_widget_set_size_request(m_display,640,480);
+	gtk_widget_set_size_request(m_display,320,240);
 	gtk_widget_set_app_paintable(m_display,TRUE);
 	gtk_widget_set_double_buffered(m_display,FALSE);
 	m_sighandler=g_signal_connect(G_OBJECT(m_display),"expose_event",

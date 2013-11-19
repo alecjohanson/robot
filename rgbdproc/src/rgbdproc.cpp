@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 	} else {
 		rgbd.setVideoMode(openni::SENSOR_DEPTH,320,240,30,
 				openni::PIXEL_FORMAT_DEPTH_100_UM);
-		rgbd.setVideoMode(openni::SENSOR_COLOR,320,240,30,
+		rgbd.setVideoMode(openni::SENSOR_COLOR,640,480,30,
 				openni::PIXEL_FORMAT_RGB888);
 	}
 	openni::VideoStream& color=rgbd.getVideoStream(openni::SENSOR_COLOR);

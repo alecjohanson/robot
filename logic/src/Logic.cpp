@@ -7,11 +7,13 @@
 #include <movement/Movement.h>
 #include "Node.h"
 #include <sharps/Distance.h>
+#include <std_msgs/Empty.h>
 #include <cmath>
 
 static ros::Publisher cmd_pub; //publishes the wanted speed
 static ros::Publisher cmd_move; //publishes the wanted move
 static ros::Subscriber sharps_sub; //get the sharps information
+static ros::Subscriber obj_sub; //get the sharps information
 static ros::Subscriber move_complete_sub; //get "movement complete" messages
 
 static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,direction>
@@ -28,12 +30,12 @@ static double sharpsDistance [6]; //distance in each sharps
 
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
-		10., //f
-		22.,
-		22.,
+		12., //f
+		20.,
+		20.,
 		17., //r
-		22.,
-		22.
+		20.,
+		20.
 };
 
 typedef enum{
@@ -129,16 +131,16 @@ void goAhead(){
 
 
 //function to follow a wall on right or left (+1 or -1)
-void followWall(int wall){
+void followWall(int wall){//here i played with wheel2wall and ktheta
 
 	//this method derives the control of the motors
 	differential_drive::Speed spd;//the motors like in fakemotors
 	const double IR_rightD = 16.2;		// distance between ch4 and ch8.
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
-	const double Wheel2Wall_D = 5; 		// distance from the wheel to a wall.
-	const double k_theta = 8;			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 5;		// Constant speed of the robot.
-	const double MaxFowardAngle = 0.14;	// Max angle where the robot is allowed to move forward in radians.
+	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
+	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
+	const double RobotSpeed = 4;//5		// Constant speed of the robot.
+	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
 		setState(FOLLOW_R);
@@ -207,8 +209,8 @@ void Advance(){
 	else goAhead();
 }
 */
-void Advance(){
-	if (type[4]+type[5]==2) {
+void Advance(){//here i put a new condition to advance
+	if (type[4]+type[5]==2 && sharpsDistance[4]<12) {
 		if (type[1]+type[2]!=2) {followWall(-1);}
 		else {
 			if (sharpsDistance[4]+sharpsDistance[5]<=sharpsDistance[1]+sharpsDistance[2])
@@ -216,7 +218,7 @@ void Advance(){
 			else followWall(1);
 		}
 	}
-	else {if (type[1]+type[2]==2) {followWall(1);}
+	else {if (type[1]+type[2]==2 && sharpsDistance[1]<12) {followWall(1);}
 		  else goAhead();}
 }
 
@@ -252,6 +254,7 @@ void newState (const sharps::Distance &msg){
 		type[i]=newtype;
 	}
 
+	if(movementState==FINISHED) return;
 	if(movementState==TURN) return;
 
 	if(movementState!=INIT && sameState) {
@@ -275,6 +278,15 @@ void newState (const sharps::Distance &msg){
 	}
 }
 
+void objdetectHandler(const std_msgs::Empty &msg) {
+	movementState=FINISHED;
+	differential_drive::Speed spd;
+	spd.W1 = 0.;
+	spd.W2 = 0.;
+	spd.header.stamp = ros::Time::now();
+	cmd_pub.publish(spd);
+}
+
 void movementCompletedHandler(const movement::Movement &msg) {
 	if(msg.turn && movementState==TURN)
 		Advance();
@@ -286,10 +298,11 @@ int main(int argc, char** argv)
 {
 	ros::init(argc, argv, "Logic");
 	ros::NodeHandle nh;
-	cmd_pub =  nh.advertise<differential_drive::Speed>("/motion/Speed", 1);
-	cmd_move =  nh.advertise<movement::Movement>("/simpleMovement/move",1);
-	sharps_sub = nh.subscribe("/sharps/Distance/",1,newState);
-	move_complete_sub = nh.subscribe("/simpleMovement/moveCompleted",1,movementCompletedHandler);
+	cmd_pub =  nh.advertise<differential_drive::Speed>("motion/Speed", 1);
+	cmd_move =  nh.advertise<movement::Movement>("simpleMovement/move",1);
+	sharps_sub = nh.subscribe("sharps/Distance/",1,newState);
+	obj_sub = nh.subscribe("objdetect/spotted",1,objdetectHandler);
+	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",1,movementCompletedHandler);
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())
