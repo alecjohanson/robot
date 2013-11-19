@@ -1,0 +1,5 @@
+Check to make sure we are in the state we expect
+  i.e. there should be a wall here
+  we don't want to get one off and put walls where all the spaces are.
+
+
