@@ -15,6 +15,7 @@ void Advance();
 void followWall(int wall);
 int normalizeAngle(int angle);
 double accel();
-double deccel();
-
+double deccel(bool turning);
+double accelTurn();
+double deccelTurn();
 #endif /* LOGIC_H_ */

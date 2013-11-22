@@ -99,7 +99,7 @@ void executeMovement(const differential_drive::Odometry &msg)
         //This is done this way so > 2pi can be achieved if desired
 		double delta=msg.theta - previousTheta;
 		if(delta<-M_PI_2) delta+=M_PI;
-		if(delta>M_PI_2) delta+=M_PI;
+		if(delta>M_PI_2) delta-=M_PI;
 		angleTraveled += delta;
 		previousTheta = msg.theta;
 		double wheelSpeed;
