@@ -24,6 +24,10 @@ static int type[6];//type of the actual state
 static double sharpsDistance [6]; //distance in each sharps
 //static bool turning=false;//to tell if the robot is turning or not
 //static int initialize=1;//to tell if we are initializing
+const int RIGHT = 1;
+const int LEFT = -1;
+static double forwardCoeff = 0;
+const double forwardStepSize = .1;
 
 
 //distance threshold for each sharp
@@ -140,9 +144,9 @@ void followWall(int wall){
 	const double RobotSpeed = 5;		// Constant speed of the robot.
 	const double MaxFowardAngle = 0.14;	// Max angle where the robot is allowed to move forward in radians.
 
-	if(wall==1)
+	if(wall==RIGHT)
 		setState(FOLLOW_R);
-	else if(wall==-1)
+	else if(wall==LEFT) 
 		setState(FOLLOW_L);
 	else {
 		std::cerr<<"Weird followWall arg: "<<wall<<std::endl;
@@ -154,7 +158,7 @@ void followWall(int wall){
 
 
 	// Getting the info from the sensors.
-	if (wall==1){
+	if (wall==RIGHT){
 		FrontSensor = sharpsDistance[1]; // front sensor
 		RearSensor = sharpsDistance[2]; // back sensor
 	}
@@ -172,16 +176,15 @@ void followWall(int wall){
 	double turn=1;//active theta-control if near wall only
 	double forward=1;//active x-control if
 
-	// While it is turning, dont go foward.
+	// While it is turning, decellerate
 	if (Robot2Wall_Angle>MaxFowardAngle || -Robot2Wall_Angle>MaxFowardAngle)
-	{forward=0.2;turn=1;}
-	// If it is not near a wall, remove turning
+	{forward=decel();turn=1;}
+	// If it is not near a wall, remove turning, accelerate
 	else if (abs(Right_Center_WallD-Wheel2Wall_D)>5)
-	{forward=1;turn=0;}
-
+	{forward=accel();turn=0;}
+  
 	// Control
 	double w = wall*(K_forward*(Right_Center_WallD-Wheel2Wall_D)*forward - k_theta*Robot2Wall_Angle*turn);
-
 	double v = forward*RobotSpeed;
 	//speeds
 	double w1 = 1*(-w+v);//right wheel
@@ -197,6 +200,35 @@ void followWall(int wall){
 	spd.header.stamp = ros::Time::now();
 	cmd_pub.publish(spd);
 	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
+}
+
+double accel()
+{
+  if (forwardCoeff >= 1)
+  {
+    forwardCoeff = 1;
+    return 1;
+  }
+
+  forwardCoeff += forwardStepSize;
+  return forwardCoeff;
+}
+
+double deccel(bool turning)
+{
+  if(turning && forwardCoeff <= .2)
+  {
+    forwardCoeff = .2;
+    return forwardCoeff;
+  }
+  else if (forwardCoeff <= 0)
+  {
+    forwardCoeff = 0;
+    return forwardCoeff;
+  }
+  
+  forwardCoeff -= forwardStepSize;
+  return forwardCoeff;
 }
 
 //ask the robot to advance
