@@ -4,15 +4,18 @@
 #include <vector>
 #include <ros/ros.h>
 #include <differential_drive/Speed.h>
+#include <differential_drive/Encoders.h>
 #include <movement/Movement.h>
 #include "Node.h"
 #include <sharps/Distance.h>
 #include <cmath>
+#include <queue>
 
 static ros::Publisher cmd_pub; //publishes the wanted speed
 static ros::Publisher cmd_move; //publishes the wanted move
 static ros::Subscriber sharps_sub; //get the sharps information
 static ros::Subscriber move_complete_sub; //get "movement complete" messages
+static ros::Subscriber encoders; //get delta_encoders
 
 static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,direction>
 static int name = -1; //future node name
@@ -29,7 +32,10 @@ const int LEFT = -1;
 static double forwardCoeff = .5;
 static double turnCoeff = 0;
 const double forwardStepSize = .01;
-
+static double angle=0;
+static double straightSpeed=1.5;
+static double ticks2;
+static double ticks1;
 
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
@@ -124,12 +130,26 @@ void Rotate(int angle){
 //ask the robot to go ahead
 void goAhead(){
 	setState(STRAIGHT);
+//first open loop method
 	differential_drive::Speed spd;
 	spd.W1 = 2.;
 	spd.W2 = 2.;
 	spd.header.stamp = ros::Time::now();
 	cmd_pub.publish(spd);
 
+//second PD-looped method
+/*	differential_drive::Speed spd;
+	double kp = 0.09 ;
+	double kd = 0.1;
+
+	angle+=ticks2-ticks1;
+
+spd.W1 = straightSpeed + kp * angle + kd * (ticks2-ticks1);
+spd.W2 = straightSpeed - kp * angle - kd * (ticks2-ticks1);
+	spd.header.stamp = ros::Time::now();
+	cmd_pub.publish(spd);
+
+*/
 }
 
 
@@ -333,6 +353,12 @@ void movementCompletedHandler(const movement::Movement &msg) {
 		Advance();
 }
 
+void encodersHandler(const differential_drive::Encoders &msg){
+ticks2=msg.delta_encoder2;
+ticks1=msg.delta_encoder1;
+}
+
+
 
 //main function
 int main(int argc, char** argv)
@@ -343,6 +369,8 @@ int main(int argc, char** argv)
 	cmd_move =  nh.advertise<movement::Movement>("/simpleMovement/move",1);
 	sharps_sub = nh.subscribe("/sharps/Distance/",1,newState);
 	move_complete_sub = nh.subscribe("/simpleMovement/moveCompleted",1,movementCompletedHandler);
+	//find name of the topic
+	encoders = nh.subscribe("/motion/Encoders",1,encodersHandler);
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())
