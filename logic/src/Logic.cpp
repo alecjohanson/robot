@@ -206,12 +206,13 @@ void followWall(int wall){
 	else if (abs(Right_Center_WallD-Wheel2Wall_D)>5)
 	{forward=accel();turn=0;}
 
-  if(forwardSensor < 12)
-  {
-    double temp = calcDeccelSpeed(forwardSensor);
-    if (temp < forward)
-      forward = temp;
-  }
+	if(forwardSensor < 30)
+	{
+	  double temp = calcDeccelSpeed(forwardSensor);
+	  std::cerr << "Decellerating because there is a wall ahead "<< temp << "\n";
+	  if (temp < forward)
+	    forward = temp;
+	}
 
 	std::cerr << "Forward Coeff " << forward << "\n";
 	std::cerr << "ForwardCCCCCC " << forwardCoeff << "\n";
@@ -238,11 +239,11 @@ void followWall(int wall){
 //This returns percentage of max_speed to move
 double calcDeccelSpeed(double forwardSensor)
 {
-  double accelerationRange = 0.2;
+  double accelerationRange = 4;
   if(forwardSensor > accelerationRange + 10.)
     return 1;
-
-  return (forwardSensor - 10.)/accelerationRange;
+  double temp = (forwardSensor - 10.)/accelerationRange;
+  return temp < 0 ? 0 : temp;
 }
 
 
