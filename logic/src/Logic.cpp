@@ -154,7 +154,7 @@ void followWall(int wall){
 	}
 
 	// Distance of sensor 1 and 2.
-	double FrontSensor,RearSensor;
+	double FrontSensor,RearSensor, forwardSensor;
 
 
 	// Getting the info from the sensors.
@@ -166,6 +166,8 @@ void followWall(int wall){
 		FrontSensor = sharpsDistance[5]; // front sensor
 		RearSensor = sharpsDistance[4]; // back sensor
 	}
+
+  forwardSensor = sharpsDistance[0]; //Sensor on front of robot
 
 	double Right_Center_WallD = 0;
 	double Robot2Wall_Angle = 0;
@@ -182,7 +184,14 @@ void followWall(int wall){
 	// If it is not near a wall, remove turning, accelerate
 	else if (abs(Right_Center_WallD-Wheel2Wall_D)>5)
 	{forward=accel();turn=0;}
-  
+
+  if(forwardSensor < 12)
+  {
+    double temp = calcDeccelSpeed(forwardSensor);
+    if (temp < forward)
+      forward = temp;
+  }
+
 	// Control
 	double w = wall*(K_forward*(Right_Center_WallD-Wheel2Wall_D)*forward - k_theta*Robot2Wall_Angle*turn);
 	double v = forward*RobotSpeed;
@@ -201,6 +210,18 @@ void followWall(int wall){
 	cmd_pub.publish(spd);
 	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
 }
+
+//When we are approaching a wall, calculate the speed so we deccelerate.
+//This returns percentage of max_speed to move
+calcDeccelSpeed(double forwardSensor)
+{
+  double accelerationRange = 0.2;
+  if(forwardSensor > accelerationRange + 10.)
+    return 1;
+
+  return (forwardSensor - 10.)/accelerationRange;
+}
+
 
 double accel()
 {
