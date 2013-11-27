@@ -18,4 +18,5 @@ double accel();
 double deccel(bool turning);
 double accelTurn();
 double deccelTurn();
+double calcDeccelSpeed(double forwardSensor);
 #endif /* LOGIC_H_ */

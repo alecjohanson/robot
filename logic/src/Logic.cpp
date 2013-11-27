@@ -236,7 +236,7 @@ void followWall(int wall){
 
 //When we are approaching a wall, calculate the speed so we deccelerate.
 //This returns percentage of max_speed to move
-calcDeccelSpeed(double forwardSensor)
+double calcDeccelSpeed(double forwardSensor)
 {
   double accelerationRange = 0.2;
   if(forwardSensor > accelerationRange + 10.)
