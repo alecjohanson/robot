@@ -12,6 +12,11 @@ include_directories(${EIGEN_INCLUDE_DIRS})
 link_directories(${EIGEN_LIBRARY_DIRS})
 target_link_libraries(rcg ${EIGEN_LIBRARIES})
 
+pkg_check_modules(PCLCOM REQUIRED pcl_common-1.7)
+include_directories(${PCLCOM_INCLUDE_DIRS})
+link_directories(${PCLCOM_LIBRARY_DIRS})
+target_link_libraries(rcg ${PCLCOM_LIBRARIES})
+
 pkg_check_modules(PCLKP REQUIRED pcl_keypoints-1.7)
 include_directories(${PCLKP_INCLUDE_DIRS})
 link_directories(${PCLKP_LIBRARY_DIRS})

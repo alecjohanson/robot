@@ -29,7 +29,8 @@
 using namespace boost::filesystem;
 using namespace std;
 
-typedef pcl::PointXYZRGBA PointType;
+//typedef pcl::PointXYZRGBA PointType;
+typedef pcl::PointXYZ PointType;
 typedef pcl::Normal NormalType;
 typedef pcl::ReferenceFrame RFType;
 typedef pcl::SHOT352 DescriptorType;
@@ -59,7 +60,7 @@ float cg_size_ (0.2f);
 float cg_thresh_ (0.1f);
 
 int 
-modelExists(int argc, char *argv[]);
+modelExists(string model_filename_, pcl::PointCloud<PointType>::Ptr &scene);
 
 void
 showHelp (char *filename)
@@ -189,19 +190,17 @@ computeCloudResolution (const pcl::PointCloud<PointType>::ConstPtr &cloud)
 //pcl::PCLPointCloud2ConstPtr
 void CompareModels( const sensor_msgs::PointCloud2ConstPtr &input){
 
+      // Convert the sensor_msgs/PointCloud2 to pcl format.
+      pcl::PointCloud<PointType>::Ptr pScene(new pcl::PointCloud<PointType>);
+      // pcl::fromPCLPointCloud2 (*input, scene);
+      fromROSMsg (*input, *pScene);
   unsigned int matches = 0;
   for (unsigned int i_cloud = 0; i_cloud < number_of_models+1; i_cloud++)
     {
       if(verbose_)  std::cout<<"Now running ...: "<< fnames.at(i_cloud)<<"\n";            
 
-      // Convert the sensor_msgs/PointCloud2 to pcl format.
-      pcl::PointCloud<PointType> scene;// (new pcl::PointCloud<PointType>);
-      // pcl::fromPCLPointCloud2 (*input, scene);
-      fromROSMsg (*input, scene);
-
-      string path = fnames[i_cloud];
-      int new_match = 0;//
-      //      modelExists(fnames[i_cloud], *scene);
+      int new_match = modelExists(fnames[i_cloud], pScene);
+      if(verbose_)  std::cout<<"\tMatches: "<< new_match<<"\n";            
       if (new_match !=-1)
 	matches = matches + new_match;
       //else
@@ -222,10 +221,10 @@ int checkArguments(int argc, char *argv[]){
   // Get all the model filenames
   while (di !=di_end)
     {
-      string model_path = di->path().filename().string();
+      string model_path = di->path().string();
       if (model_path.find(".pcd") != std::string::npos)
   	{
-  	  fnames.push_back(di->path().filename().string() );
+  	  fnames.push_back(model_path );
   	  ++di;
   	}
       else
@@ -521,6 +520,7 @@ modelExists(string model_filename_, pcl::PointCloud<PointType>::Ptr &scene)
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "ObjectFinder");
+  checkArguments(argc,argv);
   ros::NodeHandle nh;
 
   primesense_sub = nh.subscribe("/objdetect/pointclouds",1,CompareModels);
