@@ -34,5 +34,5 @@ link_directories(${VTK_LIBRARY_DIRS})
 
 
 rosbuild_add_boost_directories()
-rosbuild_link_boost(rcg system)
-target_link_libraries(rcg /usr/lib/libvtkCommon.so.5.8 /usr/lib/libvtkFiltering.so.5.8 pcl_common)
+rosbuild_link_boost(rcg system filesystem)
+#target_link_libraries(rcg /usr/lib/libvtkCommon.so.5.8 /usr/lib/libvtkFiltering.so.5.8 /usr/lib/libboost_filesystem.so.1.46.1 pcl_common)

@@ -12,17 +12,38 @@
 #include <pcl/kdtree/impl/kdtree_flann.hpp>
 #include <pcl/common/transforms.h>
 #include <pcl/console/parse.h>
+
+#include <vector>
+#include <string>
+#include <iostream>
+#include <iterator>
+#include <algorithm>
+#include <boost/filesystem.hpp>
+
 #include <ros/ros.h>
+#include <pcl/conversions.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <pcl/point_types.h>
+#include "fromROSMsg.h"
+
+using namespace boost::filesystem;
+using namespace std;
 
 typedef pcl::PointXYZRGBA PointType;
 typedef pcl::Normal NormalType;
 typedef pcl::ReferenceFrame RFType;
 typedef pcl::SHOT352 DescriptorType;
 
-std::string model_filename_;
-std::string scene_filename_;
+//std::string model_filename_;
+//std::string scene_filename_;
+unsigned int number_of_models;
+  
+// String array with the models path
+vector<string> fnames; 
 
-//static ros::Subscriber primesense_sub;
+
+
+static ros::Subscriber primesense_sub;
 
 //Algorithm params
 bool show_keypoints_ (false);
@@ -163,85 +184,65 @@ computeCloudResolution (const pcl::PointCloud<PointType>::ConstPtr &cloud)
   return res;
 }
 
-void CompareModels( pcl::PointCloud<PointType>::Ptr &scene, int argc, char *argv[]){
+// advertise<sensor_msg::PointCloud2> type for the messaeg
+//sensor_msgs::PointCloud2ConstPtr
+//pcl::PCLPointCloud2ConstPtr
+void CompareModels( const sensor_msgs::PointCloud2ConstPtr &input){
 
-
-
-//int
-//main (int argc, char *argv[]){
-
-  
   unsigned int matches = 0;
-  for (unsigned int i_cloud = 0; i_cloud < number_of_training_clouds+1; i_cloud++)
+  for (unsigned int i_cloud = 0; i_cloud < number_of_models+1; i_cloud++)
     {
-      char buffer [100];
-      //char buffer2 [100];
-      // Model path
-      snprintf ( buffer, 100, "%s%d.pcd",argv[argc-2-counter], i_cloud);
-      //snprintf ( buffer2,100, "%s",argv[argc-3-counter]);
-      //char *argv[] = {"program name", buffer, buffer2, NULL};
-      char *argv[] = {"program name", buffer, NULL};
-      int argc = sizeof(argv) / sizeof(char*) - 1;
-      if(verbose_) std::cout<<"argc "<<argc<<std::endl;
-      
-      matches = matches + modelExists(model_path, scene);
+      if(verbose_)  std::cout<<"Now running ...: "<< fnames.at(i_cloud)<<"\n";            
 
+      // Convert the sensor_msgs/PointCloud2 to pcl format.
+      pcl::PointCloud<PointType> scene;// (new pcl::PointCloud<PointType>);
+      // pcl::fromPCLPointCloud2 (*input, scene);
+      fromROSMsg (*input, scene);
+
+      string path = fnames[i_cloud];
+      int new_match = 0;//
+      //      modelExists(fnames[i_cloud], *scene);
+      if (new_match !=-1)
+	matches = matches + new_match;
+      //else
+      //return (-1);
     }
   std::cout<<"Matches"<<matches<<std::endl;
-  return matches;
+  //return matches;
 }
 
 int checkArguments(int argc, char *argv[]){
   int counter = parseCommandLine (argc, argv);
-  unsigned int number_of_training_clouds = static_cast<unsigned int> (strtol (argv[argc-1-counter], 0, 10));
-
-  //Model filename
-  // String array with the models
-  std::array<std::string, 20>
-  std::string [] filenames = new string[number_of_training_clouds];
-
-  for (unsigned int i_cloud = 0; i_cloud < number_of_training_clouds+1; i_cloud++)
-    {
-      char buffer [100];
-      //char buffer2 [100];
-      // Model path
-      snprintf ( buffer, 100, "%s%d.pcd",argv[argc-2-counter], i_cloud);
-
-      filenames = pcl::console::parse_file_extension_argument (argc, argv, ".pcd");
-
-      if (filenames.size () != 1)
-	{
-	  std::cout << "Filenames missing.\n";
-	  showHelp (argv[0]);
-	  exit (-1);
-	}
-
-      model_filename_ = argv[filenames[0]];
-
-
-      //snprintf ( buffer2,100, "%s",argv[argc-3-counter]);
-      //char *argv[] = {"program name", buffer, buffer2, NULL};
-      char *argv[] = {"program name", buffer, NULL};
-      int argc = sizeof(argv) / sizeof(char*) - 1;
-      if(verbose_) std::cout<<"argc "<<argc<<std::endl;
-      
-      matches = matches + modelExists(model_path, scene);
-
-    }
-
-
-  //scene_filename_ = argv[filenames[1]];
+  number_of_models = static_cast<unsigned int> (strtol (argv[argc-1-counter], 0, 10));
   
-  if(verbose_)  std::cout<<"Now running.. "<< model_filename_<<"\n";
-  //if(verbose_)  std::cout<<"with scene.. "<< scene_filename_<<"\n";
+  path p (argv[argc-2-counter]); // Gets the folder path with the models
+  directory_iterator di(p);
+  directory_iterator di_end;
 
+  // Get all the model filenames
+  while (di !=di_end)
+    {
+      string model_path = di->path().filename().string();
+      if (model_path.find(".pcd") != std::string::npos)
+  	{
+  	  fnames.push_back(di->path().filename().string() );
+  	  ++di;
+  	}
+      else
+  	{
+  	  std::cout << "Filenames missing.\n";
+  	  showHelp (argv[0]);
+  	  exit (-1);
+  	}
+      
+      if(verbose_)  std::cout<<"Found this model: "<< model_path<<"\n";      
+    }
+  return 0;
 }
 
 int 
-modelExists(int argc, char *argv[], pcl::PointCloud<PointType>::Ptr &scene)
+modelExists(string model_filename_, pcl::PointCloud<PointType>::Ptr &scene)
 {
-
-  
 
   pcl::PointCloud<PointType>::Ptr model (new pcl::PointCloud<PointType> ());
   pcl::PointCloud<PointType>::Ptr model_keypoints (new pcl::PointCloud<PointType> ());
@@ -258,7 +259,7 @@ modelExists(int argc, char *argv[], pcl::PointCloud<PointType>::Ptr &scene)
   if (pcl::io::loadPCDFile (model_filename_, *model) < 0)
   {
     std::cout << "Error loading model cloud." << std::endl;
-    showHelp (argv[0]);
+    //showHelp (argv[0]);
     return (-1);
   }
   if(verbose_)  std::cout<<"Loaded model\n";
