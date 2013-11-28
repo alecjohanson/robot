@@ -92,9 +92,11 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 				if(abs(d)<80.0) {
 					floor.addPoint(m_points[y][x].p);
 					m_points[y][x].category=1;
-				}
-				if(d>100.0 && d<1800.0)
+				} else if(d>100.0 && d<1800.0) {
 					m_points[y][x].category=2;
+				} else {
+					m_points[y][x].category=0;
+				}
 			}
 		}
 	}
@@ -144,10 +146,12 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 				static_cast<const uint8_t *>(p_img)+y*linesz);
 		for(int x=0; x<w; ++x) {
 			point_t *p=&m_points[y][x];
+
 			if(p->category!=2) continue;
+
 			int i=(((double)p->p[1]/(double)p->p[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
-			if(i<0) i=0;
-			else if(i>=XHIST_RESOLUTION) i=XHIST_RESOLUTION-1;
+			if(i<0) i=0; else if(i>=XHIST_RESOLUTION) i=XHIST_RESOLUTION-1;
+
 			if(xhist[i]-p->p[0]<500.) p->category=0;
 			else ++numCandidates;
 		}
@@ -215,8 +219,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 				bsize=sz;
 			}
 		}
+		numCandidates=0;
 		if(b>=0) {
-
 			finalBbox=bboxes[b];
 			for(int y=bboxes[b].img_ymax+1;y<h;++y)
 				for(int x=bboxes[b].img_xmin-1;x<=bboxes[b].img_xmax+1;++x) {
@@ -227,6 +231,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 					if(m_points[y][x].p[1]<bboxes[b].ymin-100
 							|| m_points[y][x].p[1]>bboxes[b].ymax+100) continue;
 					m_points[y][x].category=3;
+					++numCandidates;
 					updateBbox(&finalBbox,&m_points[y][x]);
 					if(y>finalBbox.img_ymax) finalBbox.img_ymax=y;
 					if(x>finalBbox.img_xmax) finalBbox.img_xmax=x;
@@ -234,21 +239,28 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 				}
 			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
 				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
-					if(m_points[y][x].category==2) m_points[y][x].category=3;
+					if(m_points[y][x].category==2) {
+						m_points[y][x].category=3;
+						++numCandidates;
+					}
 				}
 			}
 			if(objectFrames<MIN_OBJ) {
 				++objectFrames;
-				finalBbox.img_ymax=0;
 			}
-		} else {
+		} else { //if(b>0)
 			objectFrames=0;
 		}
+	} else { //if(numCandidates>200)
+		objectFrames=0;
 	}
+	if(objectFrames<MIN_OBJ) numCandidates=0;
+
 	struct {
 		int x1,x2,y1,y2;
 	} color_bbox;
-	if(finalBbox.img_ymax && c.isValid()) {
+	int cw, ch;
+	if(c.isValid() && numCandidates) {
 		Eigen::Matrix3d robot2cam=cam2robot.inverse();
 		Eigen::Vector3d corner;
 		corner=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
@@ -271,8 +283,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		color_bbox.y1-=30;
 		color_bbox.x2+=10;
 		color_bbox.y2+=10;
-		int cw=c.getVideoMode().getResolutionX();
-		int ch=c.getVideoMode().getResolutionY();
+		cw=c.getVideoMode().getResolutionX();
+		ch=c.getVideoMode().getResolutionY();
 		/*if(cw>w) {
 			color_bbox.x1*=2;
 			color_bbox.x2*=2;
@@ -283,8 +295,54 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		if(color_bbox.y1<0) color_bbox.y1=0;
 		if(color_bbox.x2>=cw) color_bbox.x2=cw-1;
 		if(color_bbox.y2>=ch) color_bbox.y2=ch-1;
+	}
 #ifndef NO_ROS
-		if(pub_img.getNumSubscribers()>0){//send color images
+	if(numCandidates) {
+		if(pub_pointcloud.getNumSubscribers()>0) {
+			sensor_msgs::PointCloud2 msg_pcl;
+			msg_pcl.header.stamp=ros::Time::now();
+			msg_pcl.header.frame_id="base_link";
+			sensor_msgs::PointField pf;
+			pf.datatype=sensor_msgs::PointField::FLOAT32;
+			pf.count=1;
+			pf.name="x";
+			pf.offset=0;
+			msg_pcl.fields.push_back(pf);
+			pf.name="y";
+			pf.offset=4;
+			msg_pcl.fields.push_back(pf);
+			pf.name="z";
+			pf.offset=8;
+			msg_pcl.fields.push_back(pf);
+			msg_pcl.point_step=16;
+			msg_pcl.is_bigendian=0;
+			msg_pcl.width=numCandidates;
+			msg_pcl.height=1;
+			msg_pcl.is_dense=true;
+			msg_pcl.row_step=msg_pcl.point_step*msg_pcl.width;
+			msg_pcl.data.resize(msg_pcl.row_step*msg_pcl.height);
+
+			uint8_t *p=&msg_pcl.data.front();
+			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
+				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
+					if(m_points[y][x].category==3) {
+						float v;
+						v=m_points[y][x].p[0]*0.0001f;
+						memcpy(p,&v,4);
+						p+=4;
+						v=m_points[y][x].p[1]*0.0001f;
+						memcpy(p,&v,4);
+						p+=4;
+						v=m_points[y][x].p[2]*0.0001f;
+						memcpy(p,&v,4);
+						p+=8;
+					}
+				}
+			}
+			std::cerr<<numCandidates<<' '<<(p-&msg_pcl.data.front())/6<<'\n';
+			pub_pointcloud.publish(msg_pcl);
+		}
+		if(c.isValid() && pub_img.getNumSubscribers()>0){//send color images
 			sensor_msgs::Image msg_img;
 			msg_img.header.stamp=ros::Time::now();
 			msg_img.height=1+color_bbox.y2-color_bbox.y1;
@@ -304,21 +362,8 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 			}
 			pub_img.publish(msg_img);
 		}
-		if(pub_pointcloud.getNumSubscribers()>0) {
-			sensor_msgs::PointCloud2 msg_pcl;
-			msg_pcl.header.stamp=ros::Time::now();
-			//todo fill in point cloud
-			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
-				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
-					if(m_points[y][x].category==3) {
-
-					}
-				}
-			}
-			pub_pointcloud.publish(msg_pcl);
-		}
-#endif
 	}
+#endif
 	if(m_pixbuf) {
 		if(c.isValid() && finalBbox.img_ymax) {
 			for(int y=0; y<h; ++y) {
