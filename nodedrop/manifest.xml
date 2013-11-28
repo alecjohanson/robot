@@ -1,0 +1,20 @@
+<package>
+  <description brief="nodedrop">
+
+     nodedrop
+
+  </description>
+  <author>robo</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/nodedrop</url>
+  <depend package="roslib"/>
+  <depend package="roscpp"/>
+  <depend package="std_msgs"/>
+  <depend package="geometry_msgs"/>
+  <depend package="sharps"/>
+  <depend package="differential_drive"/>
+  <depend package="movement"/>
+</package>
+
+
