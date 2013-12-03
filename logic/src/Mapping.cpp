@@ -1,9 +1,10 @@
+#include "Mapping.h"
 #include <iostream>
 #include <utility>
-#include "Logic.h"
 #include <vector>
 #include <ros/ros.h>
 #include <differential_drive/Speed.h>
+#include <differential_drive/Encoders.h>
 #include <movement/Movement.h>
 #include "Node.h"
 #include <sharps/Distance.h>
@@ -15,27 +16,40 @@ static ros::Publisher cmd_move; //publishes the wanted move
 static ros::Subscriber sharps_sub; //get the sharps information
 static ros::Subscriber obj_sub; //get the sharps information
 static ros::Subscriber move_complete_sub; //get "movement complete" messages
+static ros::Subscriber odometry;
 
-static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,direction>
+
 static int name = -1; //future node name
 static int actualNode=0; //actual node position of the robot
 static int orientation; //actual robot orientation
 static std::vector<Node> nodes; //list of nodes discovered
-//static bool newstate; //is the robot in a new state
+static std::vector<Node> nodesExplored; //simplified list of nodes
 static int type[6];//type of the actual state
 static double sharpsDistance [6]; //distance in each sharps
-//static bool turning=false;//to tell if the robot is turning or not
-//static int initialize=1;//to tell if we are initializing
+static double ticks1=0;
+static double ticks2=0;
+static double distance=0;
+static double r=0.05;
+static double T=360;
+static double coef= M_PI*r/T;
+static int lastNode=0;
 
+//inferior mapping
+static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,direction>
+static std::vector<nodeExplore> nodeExploreInferior;
+static std::vector<double[2]> listOfPoints;
+static double robotPosition=(0,0);
+static int nameExplore=-1;
+static int actualNodeExplore=0;
 
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
 		12., //f
-		23.,
-		23.,
-		12., //r
-		23.,
-		23.
+		15.,
+		15.,
+		17., //r
+		15.,
+		15.
 };
 
 typedef enum{
@@ -63,20 +77,108 @@ void setState(movementState_t s) {
 	}
 }
 
-// returns if there is a wall or not
-/*
-int exists(double q,int i){
-	int exists=0;
-	if (q<10.) {exists=1;}
-	if (q<22. && i!=0 && i!=3) {exists=1;}
-	return exists;
-}
-*/
-
+//method to normalize the angle
 int normalizeAngle(int angle) {
 	angle=(angle+180)%360;
 	if(angle<0) angle=360+angle;
 	return angle-180;
+}
+
+//treats the nodes list to simplify it and keep the rotation nodes
+void nodeListTreatment(){
+
+int N=nodes.size();
+
+for (int i=lastNode+1;i<N;i++){
+	//if the direction is the same
+	if (nodes[i].getOrientation()==nodes[lastNode].getOrientation()){
+		//if the overcome distance is too little (used to get rid of noisy nodes)
+		if (nodes[i].getDistance(0)<0.02){
+			//node stays the same
+			nodesExplored[lastNode].setDistance(nodesExplored[lastNode].getDistance(0)+nodes[i].getDistance(0));
+			break;
+		}
+		//a modifier plus tard pour mettre un noeud sur le mur disparu de gauche
+		else{
+		nodesExplored[lastNode].setDistance(nodesExplored[lastNode].getDistance(0)+nodes[i].getDistance(0));
+		}
+	}
+	else{//if robot has rotated, put a new node
+		lastNode=i;
+		nodesExplored.push_back(nodes[i]);
+	}
+	}
+lastNode=N;
+}
+
+/*
+//a modifier, pour faire les cas ou il y a un petit passage a gauche
+
+bool sameWall(Node n1,Node n2){
+int type1[6]=n1.getNodeType();
+int type2[6]=n2.getNodeType();
+//if there is a followed wall,
+if ((type1[4]==type2[4]&&type1[5]==type2[5])||(type1[4]==type2[4]&&type1[5]==type2[5])&&type2[0]!=0){
+	return true;
+}
+
+return false;
+}
+*/
+
+int nearestNode(){
+double dist=INFINITY;
+for (int i=0;i<listOfPoints.size();i++){
+	if(std::hypot(robotPosition[0]-listOfPoints[i][0],robotPosition[1]-listOfPoints[i][1])< ){
+
+	}
+
+
+}
+return 0;
+}
+
+
+//create nodeExploreList
+void updateListExplore(){
+if (nameExplore==-1){
+
+	nodeExplore n;
+	n.nodeExplore();
+	nameExplore++;
+	n.name=nameExplore;
+
+	double t[2]=(0,0);
+	listOfPoints.push_back((nameExplore,t));
+	nodeExploreInferior.push_back(n);
+	addNodeDirection();
+	actualNodeExplore=nameExplore;
+	distance=0;
+
+}
+else{
+
+nodeExplore n;
+nameExplore++;
+n.name=nameExplore;
+
+robotPosition[0]+=distance*cos(orientation*M_PI/180);
+robotPosition[1]+=distance*cos(orientation*M_PI/180);
+
+n.disposition[normalizeAngle((orientation-180)/90)][1]=-distance*cos(orientation*M_PI/180);
+n.disposition[normalizeAngle((orientation-180)/90)][2]=-distance*sin(orientation*M_PI/180);
+
+double t[2]=(robotPosition[1],robotPosition[2]);
+listOfPoints.push_back((nameExplore,t));
+nodeExploreInferior[actualNodeExplore].disposition[orientation/90][0]=nameExplore;
+nodeExploreInferior[actualNodeExplore].disposition[orientation/90][1]=distance*cos(orientation*M_PI/180);
+nodeExploreInferior[actualNodeExplore].disposition[orientation/90][2]=distance*cos(orientation*M_PI/180);
+
+addNodeDirection();
+
+actualNodeExplore=nameExplore;
+distance=0;
+}
 }
 
 
@@ -85,6 +187,7 @@ void addNodeDirection(){
 	exploreNode_t n;
 	n.nodeIdx=name;
 	n.direction=0;
+
 	if((type[1]==0)&&(type[2]==0)) {n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);}
 	if((type[4]==0)&&(type[5]==0)) {n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);}
 	if (type[0]==0) {n.direction=normalizeAngle(orientation); listExplore.push_back(n);}
@@ -93,18 +196,21 @@ void addNodeDirection(){
 
 //creates a new node
 void NewNode(){
+
 	Node newNode; name++; newNode.setName(name);
 	newNode.addParent(actualNode); actualNode=name;
 	newNode.setType(type);
 	newNode.setOrientation(orientation);
-	addNodeDirection();
+	//je le mets pour un autre
+	//addNodeDirection();
+	updateListExplore();
 	nodes.push_back(newNode);
+	if (name==0){nodesExplored.push_back(nodes[0]);}
 	std::cerr << "New node "<< name <<' '<<" state "<<' ';
 	for(int i=0; i<6; ++i) std::cerr<<type[i]<<' ';
 	std::cerr << "orientation "<<orientation<< std::endl;
+
 }
-
-
 
 
 //ask the robot to rotate
@@ -136,10 +242,10 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	//this method derives the control of the motors
 	differential_drive::Speed spd;//the motors like in fakemotors
 	const double IR_rightD = 16.2;		// distance between ch4 and ch8.
-	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
+	const double K_forward = 0.4;//0.5 			// Control coefficient --> ask GB.
 	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
-	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 4.5;		// Constant speed of the robot.
+	const double k_theta = 8;//8			// Control coefficient --> Ask GB.
+	const double RobotSpeed = 4.5;//5		// Constant speed of the robot.
 	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
@@ -189,8 +295,6 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	double w1 = 1*(-w+v);//right wheel
 	double w2 = 1*(v+w); //left wheel
 
-	// Debugg output
-	//std::cerr<<FrontRightSensor<<' '<<RearRightSensor<<' '<<w<<"RIGHT: "<<w1<<" LEFT: "<<w2<<' '<<std::endl;
 
 	// Publish into the speed topic.
 
@@ -198,17 +302,10 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	spd.W2 = w2;
 	spd.header.stamp = ros::Time::now();
 	cmd_pub.publish(spd);
-	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
+
 }
 
-//ask the robot to advance
-/*
-void Advance(){
-	if (type[4]+type[5]==2) {followWall(-1);}
-	else if (type[1]+type[2]==2) {followWall(1);}
-	else goAhead();
-}
-*/
+
 void Advance(){//here i put a new condition to advance
 	if (type[4]+type[5]==2 && sharpsDistance[4]<12) {
 		if (type[1]+type[2]!=2) {followWall(-1);}
@@ -230,7 +327,7 @@ void Move(){
 	}
 	exploreNode_t goal = listExplore.back();
 	listExplore.pop_back();
-	//we'll make milestone 2 later
+
 	int angle=normalizeAngle(goal.direction-orientation); orientation=goal.direction;
 	if(angle) Rotate(angle);
 	else Advance();
@@ -273,6 +370,11 @@ void newState (const sharps::Distance &msg){
 		default: break;
 		}
 	} else {
+		//here we set the distance overcome in the node
+		nodes[actualNode].setDistance(distance);
+		std::cerr << "distance"<<distance<< std::endl;
+		distance=0;
+		//and we create the new node
 		NewNode();
 		Move();
 	}
@@ -292,6 +394,11 @@ void movementCompletedHandler(const movement::Movement &msg) {
 		Advance();
 }
 
+void encodersHandler (const::differential_drive::Encoders &msg){
+ticks1=msg.delta_encoder1;
+ticks2=msg.delta_encoder2;
+distance+=coef*(ticks1+ticks2);
+}
 
 //main function
 int main(int argc, char** argv)
@@ -303,6 +410,7 @@ int main(int argc, char** argv)
 	sharps_sub = nh.subscribe("sharps/Distance/",1,newState);
 	obj_sub = nh.subscribe("objdetect/spotted",1,objdetectHandler);
 	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",1,movementCompletedHandler);
+	odometry = nh.subscribe("motion/Encoders",1,encodersHandler);
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())

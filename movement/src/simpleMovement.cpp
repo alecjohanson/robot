@@ -28,7 +28,7 @@ static ros::Subscriber odom_sub;
 //----------------------------
 // CONSTANTS
 //----------------------------
-double const MAX_SPEED = (0.5/0.05);
+double const MAX_SPEED = (0.7/0.05);
 double const MIN_SPEED = (0.02/0.05);
 double const MAX_TURN_SPEED = (MAX_SPEED*0.8);
 double const MIN_TURN_SPEED = (MIN_SPEED);
