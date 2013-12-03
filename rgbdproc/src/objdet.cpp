@@ -331,7 +331,7 @@ void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
 
 int main(int argc, char** argv)
 {
-	const char *object_file=0, *scene_file=0;
+    const char *object_file=0, *scene_file=0;
     int option_index = 0;
     while(1) {
     	int c = getopt_long (argc, argv, "o:t:g",
