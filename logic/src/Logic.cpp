@@ -6,36 +6,36 @@
 #include <differential_drive/Speed.h>
 #include <movement/Movement.h>
 #include "Node.h"
+#include "nodeExplore.h"
 #include <sharps/Distance.h>
 #include <std_msgs/Empty.h>
 #include <cmath>
+#include <differential_drive/Encoders.h>
 
 static ros::Publisher cmd_pub; //publishes the wanted speed
 static ros::Publisher cmd_move; //publishes the wanted move
 static ros::Subscriber sharps_sub; //get the sharps information
 static ros::Subscriber obj_sub; //get the sharps information
 static ros::Subscriber move_complete_sub; //get "movement complete" messages
+static ros::Subscriber encoders;
 
 static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,direction>
 static int name = -1; //future node name
 static int actualNode=0; //actual node position of the robot
 static int orientation; //actual robot orientation
 static std::vector<Node> nodes; //list of nodes discovered
-//static bool newstate; //is the robot in a new state
+
 static int type[6];//type of the actual state
 static double sharpsDistance [6]; //distance in each sharps
-//static bool turning=false;//to tell if the robot is turning or not
-//static int initialize=1;//to tell if we are initializing
 
+static double distance_=0;
+static double robotPosition[2]={0,0};
 
+using namespace std;
 
-static coef=0.05*M_PI;
+static double coef=0.05*M_PI/360;
+static std::vector<nodeExplore> listNodeExplored;
 
-static ros::Subscriber encoders;
-
-static std::vector<NodeExplore> listNodeExplored;
-
-static std::vector<double,double> listNodeToExplore;
 
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
@@ -148,7 +148,7 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
 	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
 	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 4.5;		// Constant speed of the robot.
+	const double RobotSpeed = 6;		// Constant speed of the robot.
 	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
@@ -210,14 +210,7 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
 }
 
-//ask the robot to advance
-/*
-void Advance(){
-	if (type[4]+type[5]==2) {followWall(-1);}
-	else if (type[1]+type[2]==2) {followWall(1);}
-	else goAhead();
-}
-*/
+
 void Advance(){//here i put a new condition to advance
 	if (type[4]+type[5]==2 && sharpsDistance[4]<12) {
 		if (type[1]+type[2]!=2) {followWall(-1);}
@@ -259,8 +252,7 @@ void newState (const sharps::Distance &msg){
 
 	for(int i=0; i<6; ++i) {
 		int newtype=(sharpsDistance[i]<sharpsThresholds[i])?1:0;
-		if(newtype!=type[i]) //sameState=false;
-		  type[i]=newtype;
+		if(newtype!=type[i]) {type[i]=newtype;}
 	}
 	if (type[0]==1){
 	  sameState = false;
@@ -304,88 +296,99 @@ void movementCompletedHandler(const movement::Movement &msg) {
 }
 
 
-
-
-
 void updateNodeExplore(){
 
-	node=alreadyVisited();
+	int node=alreadyVisited();
 
 	if (node!=-1){
-	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][0]=actualNodeExplore;
-	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][1]=-distance*cos(orientation);
-	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][2]=-distance*sin(orientation);
-	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][0]=node;
-	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][1]=distance*cos(orientation);
-	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][2]=distance*sin(orientation);
-	  robotPosition=listNodeExplore[node].position;
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][0]=actualNode;
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][1]=-1*distance_*cos(orientation);
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][2]=-1*distance_*sin(orientation);
+	  listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][0]=node;
+	  listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][1]=distance_*cos(orientation);
+	  listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][2]=distance_*sin(orientation);
+	  robotPosition[0]=listNodeExplored[node].position[0];
+	  robotPosition[1]=listNodeExplored[node].position[1];
 	}
 	else{
+	  nodeExplore n;
+
 	  if(name==-1){
 	    //not so useful because next case contains it
-	    nodeExplore n;
+	    //= new nodeExplore();
+	    //n.nodeExplore();
+		  n.init();
+	    n.name=0;
+	    	for(int i=0;i<4;i++){
+	    		n.disposition[i][0]=-1;
+	    	}
 	    name++;
 	    n.name=name;
-	    n.position=(0,0);
+	    n.position[0]=0;
+	    n.position[1]=0;
 	    node=name;
 	  }
 	  else{
-	    nodeExplore n;
+	    //nodeExplore n;
+		  n.init();
+	    n.name=0;
+	    for(int i=0;i<4;i++){
+	    	n.disposition[i][0]=-1;
+	    }
 	    name++;
 	    n.name=name;
-	    n.position=robotPosition;
-	    n.disposition[-normalizeAngle(orientation-180)/90][0]=actualNodeExplore;
-	    n.disposition[-normalizeAngle(orientation-180)/90][1]=-distance*cos(orientation);
-	    n.disposition[-normalizeAngle(orientation-180)/90][2]=-distance*sin(orientation);
+	    n.position[0]=robotPosition[0];n.position[1]=robotPosition[1];
+	    n.disposition[-normalizeAngle(orientation-180)/90][0]=actualNode;
+	    n.disposition[-normalizeAngle(orientation-180)/90][1]=-distance_*cos(orientation);
+	    n.disposition[-normalizeAngle(orientation-180)/90][2]=-distance_*sin(orientation);
 	    listNodeExplored.push_back(n);
-	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][0]=name;
-	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][1]=distance*cos(orientation);
-	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][2]=distance*sin(orientation);
+	    listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][0]=name;
+	    listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][1]=distance_*cos(orientation);
+	    listNodeExplored[actualNode].disposition[normalizeAngle(orientation-180)/90][2]=distance_*sin(orientation);
 	    node=name;
 	  }
 	}
-	actualNodeExplore=node;
-	addNodeDirection();	
-	distance=0;
+	actualNode=node;
+	addNodeDirection();
+	cout<<"Distance is"<<distance_<<endl;
+	distance_=0;
 	
 }
 
-double alreadyVisited(){
+int alreadyVisited(){
 
-	dist=INFINITY;
-	double node =-1;
-	
-	if (nodeExplore.size()==0){return -1;}
+	double dist=INFINITY;
+	int node =-1;
+	int test = listNodeExplored.size();
+	if (test==0){
+		return -1;
+	}
 	
 	for (int i=0;i<listNodeExplored.size();i++){
 	  
-	  if(hypot(robotPosition[0]-listNodeExplored[i].position[0],robotPosition[1]-listNodeExplored[i].position[1])<dist){
+	  if( hypot(robotPosition[0]-listNodeExplored[i].position[0],robotPosition[1]-listNodeExplored[i].position[1]) <dist){
 	    
 	    dist=hypot(robotPosition[0]-listNodeExplored[i].position[0],robotPosition[1]-listNodeExplored[i].position[1]);
 	    
 	    node=i;
 	  }
-	  
-	  
 	  if (dist<0.1){return node;}
-	  
-	  
-	  return -1;
 	}
+	return -1;
 }
 
 
-void goToNeighbourNode(double node){
+void goToNeighbourNode(int node){
 
   orientation=0;
 
   for (int i=0;i<3;i++){
-    if (listNodeExplore[actualNode].disposition[i][0]==node){
+    if (listNodeExplored[actualNode].disposition[i][0]==node){
       orientation=normalizeAngle(-90*i);
     }
   }
   Rotate(orientation);
-  while(acualNode!=node){
+  while(actualNode!=node){
     Advance();
   }
 }
@@ -397,40 +400,57 @@ bool belongsTo(double nb,std::vector<double> vect){
   return false;
 }
 
-std::vector<double> findPath(double node, double goal, std::vector<double> liste){
 
-  std::vector<double[2]> distances;
-  std::vector<std::vector<double>> listOfLists;
-  
+vector<double> findPath(int node, int goal, vector<double> liste){
+
+  vector<double> distances;
+  vector< vector<double> > listOfLists;
+
   for (int i=0;i<3;i++){
     if (listNodeExplored[node].disposition[i][0]!=-1){
       if (listNodeExplored[node].disposition[i][0]==goal){
-	distances.push_back(liste[0]+abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]),i );
-	list=liste.pushback(listNodeExplored[node].disposition[i][0]);
-	list[0]+=abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
-	listOfLists.push_back(list);
+    	  distances.push_back(liste[0]+abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]));
+    	  vector<double> list=liste;
+    	  list.push_back(listNodeExplored[node].disposition[i][0]);
+    	  list[0]+=abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
+    	  listOfLists.push_back(list);
       }
-      else    {if (belongsTo(listNodeExplored[node].disposition[i][0],liste)){
-	  distances.push_back(INFINITY,i);
-	  list=liste;list[0]=INFINITY;
-	  listOfList.pushback(list);
-	}
-	else { list=liste.push_back(listNodeExplored[node].disposition[i][0]);
-	  list[0]+= abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
-	  std::vector<double> fP=findpath(listNodeExplored[node].disposition[i][0],goal,list);
-	  distances.push_back(fP[0],i);
-	  listOfLists.pushback(fP);
-	  
-	}
+      else    {
+    	  if (belongsTo(listNodeExplored[node].disposition[i][0],liste)){
+    		  distances.push_back(INFINITY);
+    		  vector<double> list=liste;list[0]=INFINITY;
+    		  listOfLists.push_back(list);
+    	  }
+    	  else {
+    		  vector<double> list=liste;
+    		  list.push_back(listNodeExplored[node].disposition[i][0]);
+    		  list[0]= list[0]+ abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
+    		  int node_temp = listNodeExplored[node].disposition[i][0];
+    		  std::vector<double> fP=findPath(node_temp,goal,list);
+    		  distances.push_back(fP[0]);
+    		  listOfLists.push_back(fP);
+    	  }
       }
     }
   }
 
-
-  if (distances.Empty()){list=liste;list[0]=INFINITY;return list;}
-  else {N=distances.size();pos=0;min=INFINITY;
-    for (int i=0;i<N;i++){if (distances[i][0]<min){pos=i;  min=distances[i][0];}}}
-  return listOfList[pos];
+  int pos =0;
+  if (distances.empty()){
+	  vector<double> list=liste;
+	  list[0]=INFINITY;
+	  return list;
+  }
+  else {
+	  int N=distances.size();
+	  double min=INFINITY;
+	  for (int i=0;i<N;i++){
+		  if (distances[i]<min){
+			  pos=i;
+			  min=distances[i];
+		  }
+	  }
+  }
+  return listOfLists[pos];
 }
 
 void goToNode(double goal){ //mettre goal en variable globale!!!
@@ -442,15 +462,21 @@ void goToNode(double goal){ //mettre goal en variable globale!!!
     goToNeighbourNode(path[i+2]);
   }
   
-  if(actualNode==goal){dire je suis arrivé}
+  if(actualNode==goal){
+	  std::cout<<"Robot has arrived to target"<<std::endl;
+  }
   
 }
 
-void EncodersHandler(const Encoders &msg ){
+void EncodersHandler(const differential_drive::Encoders &msg ){
   // Get the distance the robot is advancing
-  ticks1=msg.delta_encoder1;
-  ticks2=msg.delta_encoder2;
-  distance+=coef*(ticks1+ticks2);
+  int ticks1=msg.delta_encoder1;
+  int ticks2=msg.delta_encoder2;
+  distance_=distance_ +coef*(ticks1+ticks2);
+  if(orientation==0){robotPosition[0]+=distance_;}
+  if(orientation==-90){robotPosition[1]-=distance_;}
+  if(orientation==-180){robotPosition[0]-=distance_;}
+  if(orientation==90){robotPosition[1]+=distance_;}
 }
 
 
@@ -466,7 +492,7 @@ int main(int argc, char** argv)
 	sharps_sub = nh.subscribe("sharps/Distance/",1,newState);
 	obj_sub = nh.subscribe("objdetect/spotted",1,objdetectHandler);
 	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",1,movementCompletedHandler);
-	encoder = nh.subscribe("Encoders",1,EncodersHandler);
+	encoders = nh.subscribe("motion/Encoders",1,EncodersHandler);
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())

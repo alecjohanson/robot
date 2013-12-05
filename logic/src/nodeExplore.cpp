@@ -1,19 +1,18 @@
-#include "iostream"
-#include "nodeExplore.h"
+//#include "iostream"
+//#include "nodeExplore.h"
+//
+//class nodeExplore{
+//public:
+//	 int name;
+//    double disposition[4][3];
+//    double position[2];
+//nodeExplore::nodeExplore();
+//
+//};
 
-nodeExplore::nodeExplore() {
-	this->name=0;
-	for(int i=0;i<4;i++){
-this->disposition[i][1]=-1;
-	}
-}
-
-
-
-
-
-
-nodeExplore::~nodeExplore() {
-	// TODO Auto-generated destructor stub
-}
+//nodeExplore::~nodeExplore() {
+//	// TODO Auto-generated destructor stub
+//	delete name;
+//	delete disposition;
+//}
 

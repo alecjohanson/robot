@@ -14,5 +14,7 @@ void Rotate(int angle);
 void Advance();
 void followWall(int wall);
 int normalizeAngle(int angle);
+void updateNodeExplore();
+int alreadyVisited();
 
 #endif /* LOGIC_H_ */

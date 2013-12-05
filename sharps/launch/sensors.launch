@@ -1,6 +1,6 @@
 <launch>
   <group ns="sharps">
-    <node pkg="sharps" name="sensors" type="sensors"/>
     <node pkg="rosserial_python" name="motors" type="serial_node.py" args="/dev/ttyACM0"/>
+    <node pkg="sharps" name="sensors" type="sensors"/>
   </group>
 </launch>
