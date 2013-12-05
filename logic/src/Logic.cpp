@@ -28,6 +28,15 @@ static double sharpsDistance [6]; //distance in each sharps
 //static int initialize=1;//to tell if we are initializing
 
 
+
+static coef=0.05*M_PI;
+
+static ros::Subscriber encoders;
+
+static std::vector<NodeExplore> listNodeExplored;
+
+static std::vector<double,double> listNodeToExplore;
+
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
 		12., //f
@@ -97,7 +106,7 @@ void NewNode(){
 	newNode.addParent(actualNode); actualNode=name;
 	newNode.setType(type);
 	newNode.setOrientation(orientation);
-	addNodeDirection();
+	updateNodeExplore();
 	nodes.push_back(newNode);
 	std::cerr << "New node "<< name <<' '<<" state "<<' ';
 	for(int i=0; i<6; ++i) std::cerr<<type[i]<<' ';
@@ -224,7 +233,7 @@ void Advance(){//here i put a new condition to advance
 
 //ask the robot to move
 void Move(){
-	if(listExplore.empty()) {
+	if(listNodeExplored.empty()) {
 		setState(FINISHED);
 		return;
 	}
@@ -232,8 +241,8 @@ void Move(){
 	listExplore.pop_back();
 	//we'll make milestone 2 later
 	int angle=normalizeAngle(goal.direction-orientation); orientation=goal.direction;
-	if(angle) Rotate(angle);
-	else Advance();
+	Rotate(angle);
+	Advance();
 }
 
 
@@ -250,13 +259,15 @@ void newState (const sharps::Distance &msg){
 
 	for(int i=0; i<6; ++i) {
 		int newtype=(sharpsDistance[i]<sharpsThresholds[i])?1:0;
-		if(newtype!=type[i]) sameState=false;
-		type[i]=newtype;
+		if(newtype!=type[i]) //sameState=false;
+		  type[i]=newtype;
 	}
-
+	if (type[0]==1){
+	  sameState = false;
+	}
+	
 	if(movementState==FINISHED) return;
 	if(movementState==TURN) return;
-
 	if(movementState!=INIT && sameState) {
 		switch(movementState) {
 		case FOLLOW_L:
@@ -293,6 +304,158 @@ void movementCompletedHandler(const movement::Movement &msg) {
 }
 
 
+
+
+
+void updateNodeExplore(){
+
+	node=alreadyVisited();
+
+	if (node!=-1){
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][0]=actualNodeExplore;
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][1]=-distance*cos(orientation);
+	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][2]=-distance*sin(orientation);
+	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][0]=node;
+	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][1]=distance*cos(orientation);
+	  listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][2]=distance*sin(orientation);
+	  robotPosition=listNodeExplore[node].position;
+	}
+	else{
+	  if(name==-1){
+	    //not so useful because next case contains it
+	    nodeExplore n;
+	    name++;
+	    n.name=name;
+	    n.position=(0,0);
+	    node=name;
+	  }
+	  else{
+	    nodeExplore n;
+	    name++;
+	    n.name=name;
+	    n.position=robotPosition;
+	    n.disposition[-normalizeAngle(orientation-180)/90][0]=actualNodeExplore;
+	    n.disposition[-normalizeAngle(orientation-180)/90][1]=-distance*cos(orientation);
+	    n.disposition[-normalizeAngle(orientation-180)/90][2]=-distance*sin(orientation);
+	    listNodeExplored.push_back(n);
+	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][0]=name;
+	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][1]=distance*cos(orientation);
+	    listNodeExplored[actualNodeEXplore].disposition[normalizeAngle(orientation-180)/90][2]=distance*sin(orientation);
+	    node=name;
+	  }
+	}
+	actualNodeExplore=node;
+	addNodeDirection();	
+	distance=0;
+	
+}
+
+double alreadyVisited(){
+
+	dist=INFINITY;
+	double node =-1;
+	
+	if (nodeExplore.size()==0){return -1;}
+	
+	for (int i=0;i<listNodeExplored.size();i++){
+	  
+	  if(hypot(robotPosition[0]-listNodeExplored[i].position[0],robotPosition[1]-listNodeExplored[i].position[1])<dist){
+	    
+	    dist=hypot(robotPosition[0]-listNodeExplored[i].position[0],robotPosition[1]-listNodeExplored[i].position[1]);
+	    
+	    node=i;
+	  }
+	  
+	  
+	  if (dist<0.1){return node;}
+	  
+	  
+	  return -1;
+	}
+}
+
+
+void goToNeighbourNode(double node){
+
+  orientation=0;
+
+  for (int i=0;i<3;i++){
+    if (listNodeExplore[actualNode].disposition[i][0]==node){
+      orientation=normalizeAngle(-90*i);
+    }
+  }
+  Rotate(orientation);
+  while(acualNode!=node){
+    Advance();
+  }
+}
+
+bool belongsTo(double nb,std::vector<double> vect){
+  for(int i=0;i<vect.size();i++){
+    if (vect[i]==nb) return true;
+  }
+  return false;
+}
+
+std::vector<double> findPath(double node, double goal, std::vector<double> liste){
+
+  std::vector<double[2]> distances;
+  std::vector<std::vector<double>> listOfLists;
+  
+  for (int i=0;i<3;i++){
+    if (listNodeExplored[node].disposition[i][0]!=-1){
+      if (listNodeExplored[node].disposition[i][0]==goal){
+	distances.push_back(liste[0]+abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]),i );
+	list=liste.pushback(listNodeExplored[node].disposition[i][0]);
+	list[0]+=abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
+	listOfLists.push_back(list);
+      }
+      else    {if (belongsTo(listNodeExplored[node].disposition[i][0],liste)){
+	  distances.push_back(INFINITY,i);
+	  list=liste;list[0]=INFINITY;
+	  listOfList.pushback(list);
+	}
+	else { list=liste.push_back(listNodeExplored[node].disposition[i][0]);
+	  list[0]+= abs(listNodeExplored[node].disposition[i][1]+listNodeExplored[node].disposition[i][2]);
+	  std::vector<double> fP=findpath(listNodeExplored[node].disposition[i][0],goal,list);
+	  distances.push_back(fP[0],i);
+	  listOfLists.pushback(fP);
+	  
+	}
+      }
+    }
+  }
+
+
+  if (distances.Empty()){list=liste;list[0]=INFINITY;return list;}
+  else {N=distances.size();pos=0;min=INFINITY;
+    for (int i=0;i<N;i++){if (distances[i][0]<min){pos=i;  min=distances[i][0];}}}
+  return listOfList[pos];
+}
+
+void goToNode(double goal){ //mettre goal en variable globale!!!
+
+  std::vector<double> liste; liste.push_back(0.01);liste.push_back(actualNode);
+  std::vector<double> path=findPath(actualNode,goal,liste);
+  
+  for (int i=0;i<path.size()-2;i++){
+    goToNeighbourNode(path[i+2]);
+  }
+  
+  if(actualNode==goal){dire je suis arrivé}
+  
+}
+
+void EncodersHandler(const Encoders &msg ){
+  // Get the distance the robot is advancing
+  ticks1=msg.delta_encoder1;
+  ticks2=msg.delta_encoder2;
+  distance+=coef*(ticks1+ticks2);
+}
+
+
+
+
 //main function
 int main(int argc, char** argv)
 {
@@ -303,6 +466,7 @@ int main(int argc, char** argv)
 	sharps_sub = nh.subscribe("sharps/Distance/",1,newState);
 	obj_sub = nh.subscribe("objdetect/spotted",1,objdetectHandler);
 	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",1,movementCompletedHandler);
+	encoder = nh.subscribe("Encoders",1,EncodersHandler);
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())
