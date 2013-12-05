@@ -195,9 +195,12 @@ void CompareModels( const sensor_msgs::PointCloud2ConstPtr &input){
       // pcl::fromPCLPointCloud2 (*input, scene);
       fromROSMsg (*input, *pScene);
   unsigned int matches = 0;
-  for (unsigned int i_cloud = 0; i_cloud < number_of_models+1; i_cloud++)
+
+  for (unsigned int i_cloud = 0; i_cloud < number_of_models; i_cloud++)
     {
-      if(verbose_)  std::cout<<"Now running ...: "<< fnames.at(i_cloud)<<"\n";            
+      //      if(verbose_)  
+	std::cout<<"Now running ...: "<< fnames.at(i_cloud)<<"\n";            
+
 
       int new_match = modelExists(fnames[i_cloud], pScene);
       if(verbose_)  std::cout<<"\tMatches: "<< new_match<<"\n";            
@@ -212,20 +215,26 @@ void CompareModels( const sensor_msgs::PointCloud2ConstPtr &input){
 
 int checkArguments(int argc, char *argv[]){
   int counter = parseCommandLine (argc, argv);
-  number_of_models = static_cast<unsigned int> (strtol (argv[argc-1-counter], 0, 10));
+
+  number_of_models = 0; //static_cast<int> (strtol (argv[argc-1-counter], 0, 10));
+
   
   path p (argv[argc-2-counter]); // Gets the folder path with the models
   directory_iterator di(p);
   directory_iterator di_end;
 
   // Get all the model filenames
-  while (di !=di_end)
+
+  while (di !=di_end )
+
     {
       string model_path = di->path().string();
       if (model_path.find(".pcd") != std::string::npos)
   	{
   	  fnames.push_back(model_path );
   	  ++di;
+
+	  ++number_of_models;
   	}
       else
   	{
@@ -433,7 +442,10 @@ modelExists(string model_filename_, pcl::PointCloud<PointType>::Ptr &scene)
   //
   //  Output results
   //
+
   if(verbose_) std::cout << "Model instances found: " << rototranslations.size () << std::endl;
+
+
   if(verbose_)  for (size_t i = 0; i < rototranslations.size (); ++i)
   {
     std::cout << "\n    Instance " << i + 1 << ":" << std::endl;
