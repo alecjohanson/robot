@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include <robot0/Distance.h>
+#include <sharps/Distance.h>
 #include <differential_drive/Speed.h>
 #include "IRtest.h"
 #include <cmath>
@@ -11,8 +11,7 @@ using namespace differential_drive;
 static ros::Publisher cmd_pub;
 static ros::Subscriber sharps_sub;
 
-
-void followWall(const robot0::Distance &msg){
+void followWall(const sharps::Distance &msg){
    
   //this method derives the control of the motors
   Speed spd;//the motors like in fakemotors
@@ -26,7 +25,6 @@ void followWall(const robot0::Distance &msg){
 
   //	msg.ch3;
   //	msg.ch4;
-
   double Right_Center_WallD = 0;
   double Robot2Wall_Angle = 0;
   
