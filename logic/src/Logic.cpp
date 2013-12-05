@@ -110,6 +110,7 @@ void NewNode(){
 //ask the robot to rotate
 void Rotate(int angle){
 	setState(TURN);
+	sleep(2);
 	movement::Movement move;
 	move.turn = true;
 	move.magnitude = angle*M_PI/180.0;
