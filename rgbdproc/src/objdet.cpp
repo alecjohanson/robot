@@ -364,18 +364,27 @@ int main(int argc, char** argv)
 	std::cerr<<"Generating object models...";
 	timespec tstart, tend;
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
-	{ //read reference file
-		cv::Mat img_in = cv::imread ( object_file,1);
-		//cv::Mat mask_object = redFilter(tmp_object);
-		cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
-		cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
-		int from_to[]={2,0};
-		cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
-		cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
-		object.w=img_object.cols;
-		object.h=img_object.rows;
-		cv::SurfFeatureDetector detector (minHessian);
-		detector.detect( img_object, object.keypoints );
+	{ 
+	  //read reference file
+	  cv::Mat img_in = cv::imread ( object_file,1);
+	  //cv::Mat mask_object = redFilter(tmp_object);
+	  // create a matrix with 8 bits x 3 color info per pixel
+	  cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
+	  // Convert the image from RGB --> HSV
+	  cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
+	  
+	  int from_to[]={2,0};
+	  // Create a matrix 8 bits x 1 color info per pixel
+	  cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
+	  
+	  // Take only the hue value and copy it into the img_object.
+	  cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
+	  object.w=img_object.cols;
+	  object.h=img_object.rows;
+	  
+	  
+	  cv::SurfFeatureDetector detector (minHessian);
+	  detector.detect( img_object, object.keypoints );
 		cv::SurfDescriptorExtractor extractor;
 		extractor.compute (img_object, object.keypoints, object.descriptors );
 		clock_gettime(CLOCK_MONOTONIC, &tend);
