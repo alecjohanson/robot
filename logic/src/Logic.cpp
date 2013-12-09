@@ -109,6 +109,11 @@ void NewNode(){
 
 //ask the robot to rotate
 void Rotate(int angle){
+    differential_drive::Speed spd;
+    spd.W1 = 0;
+    spd.W2 = 0;
+    spd.header.stamp = ros::Time::now();
+    cmd_pub.publish(spd);
 	setState(TURN);
 	sleep(2);
 	movement::Movement move;
