@@ -54,7 +54,7 @@ static ros::Publisher talk_pub;
 static image_transport::Subscriber obj_sub;
 
 // Debug flag ** future work
-bool verbose_(false);
+bool verbose_(true);
 bool HSV_(false);
 int have_gui=1;
 
@@ -171,20 +171,21 @@ double DetectObject(const cv::Mat& scene_data) {
     scene_data.copyTo(img_scene,mask_scene);
   */
   
-  
-  if (HSV_){
+
+//  if (HSV_)
+
     // Create a HSV picture of the input
     cv::Mat img_hsv(scene_data.rows, scene_data.cols, CV_8UC3);
     cv::cvtColor(scene_data,img_hsv,CV_RGB2HSV);
     int from_to[]={2,0};
     cv::Mat img_scene(img_hsv.rows, img_hsv.cols, CV_8UC1);
     cv::mixChannels(&img_hsv,1,&img_scene,1,from_to,1);
-  }
-  else{
-    // Create a grayscale picture of the input
-    cv::Mat img_scene = cvCreateMat(scene_data.rows, scene_data.cols, CV_8UC1);
-    cvtColor(scene_data, img_scene,CV_BGR2GRAY);
-  }
+
+
+//    // Create a grayscale picture of the input
+//    cv::Mat img_scene = cvCreateMat(scene_data.rows, scene_data.cols, CV_8UC1);
+//    cvtColor(scene_data, img_scene,CV_BGR2GRAY);
+
 
   //Get the SURF features for the scene
   cv::SurfFeatureDetector detector (minHessian);
@@ -211,7 +212,7 @@ double DetectObject(const cv::Mat& scene_data) {
   std::vector<cv::DMatch> matches;
   
   // ****************************
-  // If we don't have desciptors - SECURITY CHECK!
+  // If we don't have desciptors - ERROR CHECK!
   // ***************************
   if (descriptors_scene.empty()){
     cout<<"Found no features in pic! :S"<<endl;
@@ -346,14 +347,15 @@ double DetectObject(const cv::Mat& scene_data) {
   double p=double(confident_points_polygon)/double(good_matches.size());
   double p2=double((float)inlierCounter/(float)outputMask.size());
   //if (verbose_)
-    std::cout<<"p: "<<p<<" vs p2 "<<p2<<std::endl;
-  return p2;
+   std::cout<<"p: "<<p<<" vs p2 "<<p2<<std::endl;
+  return p;
   
 }
 
 
 void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
   // convert from ros message to opencv image
+  cout<<"getting data ..."<<endl;
   cv_bridge::CvImageConstPtr cv_ptr;
   static int w=1;
   try
@@ -376,7 +378,7 @@ void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
     cv::imwrite("/home/robo/object-images/pepper4.png",cv_ptr->image,compression_params);
     w=1;
   }
-  
+
   static double p=0.0;
   static double alpha=1.0;
   p=alpha*DetectObject(cv_ptr->image)+(1.-alpha)*p;
@@ -436,47 +438,25 @@ int main(int argc, char** argv)
 	  cv::Mat img_in = cv::imread ( object_file,1);
 	  //cv::Mat mask_object = redFilter(tmp_object);
 	  // create a matrix with 8 bits x 3 color info per pixel
-<<<<<<< HEAD
-	  cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
-	  // Convert the image from RGB --> HSV
-	  cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
 	  
-	  int from_to[]={2,0};
-	  // Create a matrix 8 bits x 1 color info per pixel
-	  cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
-	  
-	  // Take only the hue value and copy it into the img_object.
-	  cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
-	  object.w=img_object.cols;
-	  object.h=img_object.rows;
-	  
-	  
-	  cv::SurfFeatureDetector detector (minHessian);
-	  detector.detect( img_object, object.keypoints );
-		cv::SurfDescriptorExtractor extractor;
-		extractor.compute (img_object, object.keypoints, object.descriptors );
-		clock_gettime(CLOCK_MONOTONIC, &tend);
-		if(have_gui) object.image=img_object;
-=======
-	  
+	  //if (HSV_)
 
-	  if (HSV_){
 	    cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
 	    // Convert the image from RGB --> HSV
 	    cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
-	    
+
 	    int from_to[]={2,0};
 	    // Create a matrix 8 bits x 1 color info per pixel
 	    cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
-	    
+
 	    // Take only the hue value and copy it into the img_object.
 	    cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
-	  }
-	  else{
-	    // Grayscale
-	    cv::Mat img_object = cvCreateMat(img_in.rows, img_in.cols, CV_8UC1);
-	    cvtColor(img_in, img_object,CV_BGR2GRAY);
-	  }
+
+
+//	    // Grayscale
+//	    cv::Mat img_object = cvCreateMat(img_in.rows, img_in.cols, CV_8UC1);
+//	    cvtColor(img_in, img_object,CV_BGR2GRAY);
+
 	  
 	  object.w=img_object.cols;
 	  object.h=img_object.rows;
@@ -507,7 +487,7 @@ int main(int argc, char** argv)
 
 	  clock_gettime(CLOCK_MONOTONIC, &tend);
 	  if(have_gui) object.image=img_object;
->>>>>>> c667b0ad610e4be3cc2c19380d5715b8bff49372
+
 	}
 	uint64_t t=(tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L;
 	std::cerr<<' '<<t<<"µs, done.\n";
