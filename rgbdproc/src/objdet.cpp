@@ -24,6 +24,10 @@
 #include "opencv2/nonfree/features2d.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
 #include "opencv2/core/core.hpp"
+
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc_c.h"
+
 #include <image_transport/image_transport.h>
 
 #include <cv_bridge/cv_bridge.h>
@@ -32,15 +36,29 @@
 #include <getopt.h>
 #include <time.h>
 
-static const int minHessian = 200;
+using namespace cv;
+using namespace std;
 
+
+// *************************
+// Recognition parameters
+// *************************
+static const int minHessian = 300;
+static const int knn = 3;
+
+// Publisher for object detection
 static ros::Publisher obj_pub;
+// Publisher for speaker
 static ros::Publisher talk_pub;
+
 static image_transport::Subscriber obj_sub;
-//static ros::Subscriber enc_sub;
 
-int have_gui;
+// Debug flag ** future work
+bool verbose_(false);
 
+int have_gui=1;
+
+// Option structure for arguments
 static const struct option long_options[] = {
 		{"gui",            no_argument, &have_gui,   1},
 		{"object",   required_argument,         0, 'o'},
@@ -48,6 +66,7 @@ static const struct option long_options[] = {
 		{0, 0, 0, 0}
 };
 
+// Obj Description structure
 typedef struct {
 	std::vector<cv::KeyPoint> keypoints;
 	cv::Mat descriptors;
@@ -55,7 +74,17 @@ typedef struct {
 	cv::Mat image;
 } objDescr_t;
 
+ //ObjDescr for one object
 objDescr_t object;
+
+// To sort the distance table
+bool compareDist(const cv::DMatch &a, const cv::DMatch &b)
+{
+	// smallest comes first
+	double da = a.distance;
+	double db = b.distance;
+    return (da < db);
+}
 
 //TODO: take pictures from correct angle and distance, of a sphere (tomato)
 //	get image from topic, convert from ros image to opencd Mat, send result to topic
@@ -125,12 +154,14 @@ int wn_PnPoly( cv::Point P, std::vector<cv::Point2f> V, int n )
 }
 //===================================================================
 
+
+
 double DetectObject(const cv::Mat& scene_data) {
-	std::cerr<<"Detecting object...";
+	if (verbose_) std::cerr<<"Detecting object...";
 	timespec tstart, tend;
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 
-	double Kmatch = 5;
+	double Kmatch = 2;//knn;
 
 	/* masking, maybe not a good idea ( it was not, at least not when
 	 * only trying to find the tomato! ) */
@@ -140,64 +171,108 @@ double DetectObject(const cv::Mat& scene_data) {
 	scene_data.copyTo(img_scene,mask_scene);
 	*/
 
-	// uncomment to not filter red
-	cv::Mat img_hsv(scene_data.rows, scene_data.cols, CV_8UC3);
-	cv::cvtColor(scene_data,img_hsv,CV_RGB2HSV);
-	int from_to[]={2,0};
-	cv::Mat img_scene(img_hsv.rows, img_hsv.cols, CV_8UC1);
-	cv::mixChannels(&img_hsv,1,&img_scene,1,from_to,1);
-	//img_scene = scene_data;
+	// Create a grayscale picture of the input
+	cv::Mat img_scene = cvCreateMat(scene_data.rows, scene_data.cols, CV_8UC1);
+	cvtColor(scene_data, img_scene,CV_BGR2GRAY);
+
+	// Create a HSV picture of the input
+//	cv::Mat img_hsv(scene_data.rows, scene_data.cols, CV_8UC3);
+//	cv::cvtColor(scene_data,img_hsv,CV_RGB2HSV);
+//	int from_to[]={2,0};
+//	cv::Mat img_scene(img_hsv.rows, img_hsv.cols, CV_8UC1);
+//
+//	cv::mixChannels(&img_hsv,1,&img_scene,1,from_to,1);
 
 
-	/*if (!img_object.data || !img_scene.data) {
-		std::cerr << "ERROR READING IMAGES\n"; return -1;
-	}
-	 */
-
+	//Get the SURF features
 	cv::SurfFeatureDetector detector (minHessian);
 	std::vector<cv::KeyPoint> keypoints_scene;
 	detector.detect( img_scene, keypoints_scene );
+
+	// Time output
 	clock_gettime(CLOCK_MONOTONIC, &tend);
-	std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
+	if (verbose_)std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
 			<<" keypoints.";
 
-	// calculate descriptors
+	// calculate descriptors (Feature vectors)
 	cv::SurfDescriptorExtractor extractor;
 	cv::Mat descriptors_scene;
 	extractor.compute (img_scene, keypoints_scene, descriptors_scene );
+
+	// Time output
 	clock_gettime(CLOCK_MONOTONIC, &tend);
-	std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
+	if (verbose_)std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
 			<<" descriptors.";
+
+//	CvSURFParams params = cvSURFParams(500,1);
+//	CvSeq *keypoints_scene =0, *descriptors_scene=0;
+//	CvMemStorage* storage = cvCreateMemStorage(0);
+//
+//	cvExtractSURF( img_scene, 0, &keypoints_scene, &descriptors_scene, storage,params);
 
 	// match using FLANN
 	cv::FlannBasedMatcher matcher;
 	std::vector<cv::DMatch> matches;
+
+	// If we don't have desciptors
+	if (descriptors_scene.empty()){
+		cout<<"Found no features in pic! :S"<<endl;
+		return 0;
+	}
+
+	// Otherwise use knn with k = 2
 	matcher.match ( object.descriptors, descriptors_scene, matches );
+	// Get the two best matches for each object descriptor on the scene.
+	//matcher.knnMatch ( object.descriptors, descriptors_scene, matches,knn );
+
+	// Time output
 	clock_gettime(CLOCK_MONOTONIC, &tend);
-	std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
+	if (verbose_)std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
 			<<" match.";
 
-	// calculate max and min distances between keypoints
+	// calculate min distance between keypoints
 
-	double max_dist = 0; double min_dist = 100;
-	for( int i = 0; i < object.descriptors.rows; i++ ) {
-		double dist = matches[i].distance;
-		if( dist < min_dist ) min_dist = dist;
-		if( dist > max_dist ) max_dist = dist;
-	}
+//	double max_dist = 0; double min_dist = 100;
+//	int maxdist_i=0; int mindist_i=0;
+//	for( int i = 0; i < descriptors_scene.rows; i++ ) {
+//		double dist = matches[i].distance;
+//		if( dist < min_dist ){ min_dist = dist;mindist_i=i; }
+//		if( dist > max_dist ){ max_dist = dist;maxdist_i=i; }
+//	}
+	bool other_(false);
+	//if (other_){
+	std::sort(matches.begin(), matches.end(), compareDist);
+	double min_dist = matches[0].distance;
+	//}
+	//double min_dist = std::min(matches.begin(), matches.end(), compareDist);
 
 	//printf("-- Max dist : %f \n", max_dist );
 	//printf("-- Min dist : %f \n", min_dist );
 
 	// draw only matches whose distance is less than 2*min_dist
 
+	// Get the matches that are good according to the threshold.
 	std::vector<cv::DMatch> good_matches;
 
+//	if (others_){
 	for( int i = 0; i < object.descriptors.rows; i++ ) {
 		if( matches[i].distance <= Kmatch*min_dist ) {
 			good_matches.push_back( matches[i]); }
 	}
+//	}
+//	else
+//	{
+//		for (int i =0;i< min(descriptors_scene.rows-1, (int)matches.size());i++){
+//			if ( (matches[i][0].distance <0.6*matches[i][1].distance) &&
+//					( (int)matches[i].size()<=2 && (int) matches[i].size()>0))
+//			{
+//				good_matches.push_back(matches[i][0]);
+//			}
+//		}
+//
+//	}
 
+	//Draw the matches
 	cv::Mat img_matches;
 	if(have_gui) {
 		drawMatches( object.image, object.keypoints, img_scene, keypoints_scene, \
@@ -210,22 +285,42 @@ double DetectObject(const cv::Mat& scene_data) {
 	std::vector<cv::Point2f> obj;
 	std::vector<cv::Point2f> scene;
 
-	for(size_t i = 0; i < good_matches.size(); i++ ) {
-		//-- Get the keypoints from the good matches
+	// Get the coordenates from the good matches.
+	for(size_t i = 0; i < 4;i++){//good_matches.size(); i++ ) {
 		obj.push_back( object.keypoints[ good_matches[i].queryIdx ].pt );
 		scene.push_back( keypoints_scene[ good_matches[i].trainIdx ].pt );
 	}
 
-	cv::Mat H = cv::findHomography( obj, scene, CV_RANSAC );
+	//cv::Mat H = cv::findHomography( obj, scene, CV_RANSAC );
+	vector<uchar> outputMask;
+
+	// If there are not enough points (4) then we just exit.
+	if (obj.size()<4){
+		cout<<"Can't calculate homography"<<endl;
+		return 0;
+	}
+
+	cv::Mat H = cv::findHomography( obj, scene, CV_RANSAC,3, outputMask );
+	int inlierCounter=0;
+	for (int i =0; i<outputMask.size(); i++){
+		if (outputMask[i] ==1)
+			inlierCounter++;
+	}
+
+	// Time output
 	clock_gettime(CLOCK_MONOTONIC, &tend);
-	std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
+	if (verbose_)std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
 			<<" homography.";
 
 	//-- Get the corners from the image_1 ( the object to be "detected" )
 	std::vector<cv::Point2f> obj_corners(4);
-	obj_corners[0] = cvPoint(0,0); obj_corners[1] = cvPoint( object.w, 0 );
-	obj_corners[2] = cvPoint( object.w, object.h ); obj_corners[3] = cvPoint( 0, object.h );
+	obj_corners[0] = cvPoint(0,0);
+	obj_corners[1] = cvPoint( object.w, 0 );
+	obj_corners[2] = cvPoint( object.w, object.h );
+	obj_corners[3] = cvPoint( 0, object.h );
+
 	std::vector<cv::Point2f> scene_corners(4);
+
 
 	cv::perspectiveTransform( obj_corners, scene_corners, H);
 	// calculate some kind of confidence 
@@ -262,19 +357,28 @@ double DetectObject(const cv::Mat& scene_data) {
 	scene_corners.pop_back();
 
 	clock_gettime(CLOCK_MONOTONIC, &tend);
-	std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
+	if (verbose_)std::cerr<<' '<<((tend.tv_nsec-tstart.tv_nsec)/1000L+(tend.tv_sec-tstart.tv_sec)*1000000L)
 			<<"µs, done.\n";
 
+	// Show lines matching the identified region.
 	if(have_gui) {
 		//-- Draw lines between the corners (the mapped object in the scene - image_2 )
+//		cv::line( img_matches, scene_corners[0] + cv::Point2f( img_scene.cols, 0), \
+//				scene_corners[1] + cv::Point2f( img_scene.cols, 0), cv::Scalar(0, 255, 0), 4 );
+//		cv::line( img_matches, scene_corners[1] + cv::Point2f( img_scene.cols, 0), \
+//				scene_corners[2] + cv::Point2f( img_scene.cols, 0), cv::Scalar( 0, 255, 0), 4 );
+//		cv::line( img_matches, scene_corners[2] + cv::Point2f( img_scene.cols, 0), \
+//				scene_corners[3] + cv::Point2f( img_scene.cols, 0), cv::Scalar( 0, 255, 0), 4 );
+//		cv::line( img_matches, scene_corners[3] + cv::Point2f( img_scene.cols, 0), \
+//				scene_corners[0] + cv::Point2f( img_scene.cols, 0), cv::Scalar( 0, 255, 0), 4 );
 		cv::line( img_matches, scene_corners[0] + cv::Point2f( object.w, 0), \
-				scene_corners[1] + cv::Point2f( object.w, 0), cv::Scalar(0, 255, 0), 4 );
-		cv::line( img_matches, scene_corners[1] + cv::Point2f( object.w, 0), \
-				scene_corners[2] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
-		cv::line( img_matches, scene_corners[2] + cv::Point2f( object.w, 0), \
-				scene_corners[3] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
-		cv::line( img_matches, scene_corners[3] + cv::Point2f( object.w, 0), \
-				scene_corners[0] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
+						scene_corners[1] + cv::Point2f( object.w, 0), cv::Scalar(0, 255, 0), 4 );
+				cv::line( img_matches, scene_corners[1] + cv::Point2f( object.w, 0), \
+						scene_corners[2] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
+				cv::line( img_matches, scene_corners[2] + cv::Point2f( object.w, 0), \
+						scene_corners[3] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
+				cv::line( img_matches, scene_corners[3] + cv::Point2f( object.w, 0), \
+						scene_corners[0] + cv::Point2f( object.w, 0), cv::Scalar( 0, 255, 0), 4 );
 
 		//-- Show detected matches
 		cv::namedWindow("matches", CV_WINDOW_NORMAL);
@@ -284,7 +388,10 @@ double DetectObject(const cv::Mat& scene_data) {
 	//std::cerr <<"Rectangle: "<< double(confident_points_rectangle)/double(good_matches.size()) << std::endl;
 	//std::cerr <<"Polygon: "<< double(confident_points_polygon)/double(good_matches.size()) << std::endl;
 	double p=double(confident_points_polygon)/double(good_matches.size());
+	double p2=double((float)inlierCounter/(float)outputMask.size());
+	std::cout<<"p: "<<p<<" vs p2 "<<p2<<std::endl;
 	return p;
+
 }
 
 
@@ -307,14 +414,14 @@ void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
 	    std::vector<int> compression_params;
 	    compression_params.push_back(CV_IMWRITE_PNG_COMPRESSION);
 	    compression_params.push_back(9);
-		cv::imwrite("/home/robo/object-images/pepper2.png",cv_ptr->image,compression_params);
+		cv::imwrite("/home/robo/object-images/pepper4.png",cv_ptr->image,compression_params);
 		w=1;
 	}
 
 	static double p=0.0;
-	static double alpha=0.6;
+	static double alpha=1.0;
 	p=alpha*DetectObject(cv_ptr->image)+(1.-alpha)*p;
-	std::cerr<<"Confidence: "<<p*100.<<"%\n";
+	if (verbose_)std::cerr<<"Confidence: "<<p*100.<<"%\n";
 	if(p>0.50) {
 		//todo send message to stop the robot
 		std_msgs::Empty nothing;
@@ -323,16 +430,17 @@ void DetectObjectHandler(const sensor_msgs::ImageConstPtr &img) {
 		std_msgs::String something;
 		something.data="Patrick, I found a pepper.";
 		talk_pub.publish(something);
-		exit(0);
+		//exit(0);
 	}
 }
 
 
+//std::vector<objDescr_t> object;
 
 int main(int argc, char** argv)
 {
     const char *object_file=0, *scene_file=0;
-    int option_index = 0;
+    int option_index = 1;
     while(1) {
     	int c = getopt_long (argc, argv, "o:t:g",
     			long_options, &option_index);
@@ -364,20 +472,51 @@ int main(int argc, char** argv)
 	std::cerr<<"Generating object models...";
 	timespec tstart, tend;
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
-	{ //read reference file
-		cv::Mat img_in = cv::imread ( object_file,1);
-		//cv::Mat mask_object = redFilter(tmp_object);
-		cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
-		cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
-		int from_to[]={2,0};
-		cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
-		cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
-		object.w=img_object.cols;
-		object.h=img_object.rows;
-		cv::SurfFeatureDetector detector (minHessian);
-		detector.detect( img_object, object.keypoints );
-		cv::SurfDescriptorExtractor extractor;
-		extractor.compute (img_object, object.keypoints, object.descriptors );
+	{ 
+	  //read reference file
+	  cv::Mat img_in = cv::imread ( object_file,1);
+	  //cv::Mat mask_object = redFilter(tmp_object);
+	  // create a matrix with 8 bits x 3 color info per pixel
+	  
+		cv::Mat img_object = cvCreateMat(img_in.rows, img_in.cols, CV_8UC1);
+		cvtColor(img_in, img_object,CV_BGR2GRAY);
+//	  cv::Mat img_hsv(img_in.rows, img_in.cols, CV_8UC3);
+//	  // Convert the image from RGB --> HSV
+//	  cv::cvtColor(img_in,img_hsv,CV_RGB2HSV);
+//
+//	  int from_to[]={2,0};
+//	  // Create a matrix 8 bits x 1 color info per pixel
+//	  cv::Mat img_object(img_hsv.rows, img_hsv.cols, CV_8UC1);
+//
+//	  // Take only the hue value and copy it into the img_object.
+//	  cv::mixChannels(&img_hsv,1,&img_object,1,from_to,1);
+	  object.w=img_object.cols;
+	  object.h=img_object.rows;
+	  
+
+	  //for (int i=0; i<3;i++){
+		  //std::cout<<"i:"<<i<<endl;
+		  //std::stringstream convert;
+		  //convert << i+3;
+		  //string object_file = "home/robo/object-images/pepper" + convert.str() +".png";
+//		  cv::Mat img_in = cv::imread ( object_file,1);
+//
+//		  cv::Mat img_object = cvCreateMat(img_in.rows, img_in.cols, CV_8UC1);
+//		  cvtColor(img_in, img_object,CV_BGR2GRAY);
+//		  object.w=img_object.cols;
+//		  object.h=img_object.rows;
+
+		  cv::SurfFeatureDetector detector (minHessian);
+		  detector.detect( img_object, object.keypoints );
+		  cv::SurfDescriptorExtractor extractor;
+		  extractor.compute (img_object, object.keypoints, object.descriptors );
+		  //std::cout<<"all nice"<<i<<endl;
+//		  if(i!=3){
+//			  object.keypoints.insert(object.keypoints.end(),object2.keypoints.begin(),object2.keypoints.end());
+//			  hconcat(object.descriptors,object2.descriptors,object.descriptors);
+//		  }
+	  //}
+
 		clock_gettime(CLOCK_MONOTONIC, &tend);
 		if(have_gui) object.image=img_object;
 	}
