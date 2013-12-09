@@ -5,6 +5,7 @@ rosbuild_init ()
 set (EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
 rosbuild_add_executable (rcg src/recognition.cpp)
+rosbuild_add_executable (objrecord src/simpleObjectRecorder.cpp src/Contest.cpp)
 
 include($ENV{ROS_ROOT}/core/rosbuild/FindPkgConfig.cmake)
 pkg_check_modules(EIGEN REQUIRED eigen3)
