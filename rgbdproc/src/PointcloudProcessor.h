@@ -35,12 +35,6 @@ private:
 		Eigen::Matrix<int16_t,3,1> p;
 		int16_t category;
 	} point_t;
-	typedef struct {
-		uint16_t img_xmin, img_xmax, img_ymin, img_ymax;
-		int16_t xmin, xmax;
-		int16_t ymin, ymax;
-		int16_t zmin, zmax;
-	} bbox_t;
 	point_t m_points[480][640];
 	size_t m_pointsAlloc;
 	double m_hFOV, m_vFOV;
@@ -60,13 +54,40 @@ private:
 	gulong m_sighandler;
 	static const unsigned int DIST_MIN=3000, DIST_MAX=14000;
 	static const int MIN_OBJ=3;
+	static const int16_t OBJ_MINH=300, OBJ_MINW=250;
+	static const int16_t OBJ_MAXH=1400, OBJ_MAXW=1600;
+	static const int16_t OBJ_MIN_WALLDIST=500;
+	static const int16_t CAT_INVALID=-1, CAT_UNKNOWN=0, CAT_FLOOR=1,
+			CAT_OBJCANDIDATE=2, CAT_OBJECT=3, CAT_WALL=4;
+	static const size_t MIN_FLOOR_POINTS=20000;
 
 	#ifndef NO_ROS
 	ros::Publisher pub_img, pub_pointcloud;
 	#endif
 
+	class BoundingBox{
+	public:
+		int16_t img_xmin, img_xmax, img_ymin, img_ymax;
+		int16_t xmin, xmax;
+		int16_t ymin, ymax;
+		int16_t zmin, zmax;
+		BoundingBox();
+		BoundingBox(int16_t x, int16_t y, const point_t *p);
+		void setToPoint(int16_t x, int16_t y, const point_t *p);
+		void addPoint(int16_t x, int16_t y, const point_t *p);
+		bool isInside(const point_t *p);
+		bool intersects(const BoundingBox &b);
+	};
+	class ColorBbox{
+	public:
+		int x1,x2,y1,y2;
+		void set(double camHeight,
+				const openni::VideoStream &d, const openni::VideoStream &c,
+				const BoundingBox &bbox, const Eigen::Matrix3d cam2robot);
+		bool isInside(int x, int y);
+	};
+
 	double pxToPoint(point_t *pt,int16_t x, int16_t y, uint16_t z);
-	void updateBbox(bbox_t *b, const point_t *p);
 };
 
 #endif /* POINTCLOUDPROCESSOR_H_ */
