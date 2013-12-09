@@ -6,9 +6,6 @@
  * This should take a single Movement message and execute it fully.
  * There is no checks to see if other nodes are trying to move the robot as well
  *
- * Name of the topics should be double checked.
- * I have not tested this AT ALL yet.
- *
  **************************************************/
 #include <iostream>
 #include <ros/ros.h>
@@ -29,15 +26,17 @@ static ros::Subscriber odom_sub;
 // CONSTANTS
 //----------------------------
 double const MAX_SPEED = (0.5/0.05);
-double const MIN_SPEED = (0.02/0.05);
+double MIN_SPEED = (0.02/0.05);
 double const MAX_TURN_SPEED = (MAX_SPEED*0.8);
-double const MIN_TURN_SPEED = (MIN_SPEED);
+double MIN_TURN_SPEED = (MIN_SPEED);
 double const ACCEL_RANGE_LIN = 0.2;
 double const ACCEL_RANGE_ROT = (M_PI*0.5);
 
 //Value to be set at beginning
 double initialX = 0;
 double initialY = 0;
+double previousX = 0;
+double previousY = 0;
 double previousTheta = 0;
 double angleTraveled = 0;
 bool turn;
@@ -51,6 +50,7 @@ void odometryHandler(const differential_drive::Odometry &msg);
 double calcWheelSpeed(double distanceFromEndPoint, bool turn);
 void finalize();
 void executeMovement(const differential_drive::Odometry &msg);
+bool inSamePlace(const differential_drive::Odometry &msg);
 
 movement::Movement currentMovement;
 
@@ -98,6 +98,10 @@ void executeMovement(const differential_drive::Odometry &msg)
 	{
         //This is done this way so > 2pi can be achieved if desired
 		double delta=msg.theta - previousTheta;
+		if (delta <= 0.000000001)
+		{
+			MIN_TURN_SPEED += .001;		
+		}
 		if(delta<-M_PI_2) delta+=M_PI;
 		if(delta>M_PI_2) delta-=M_PI;
 		angleTraveled += delta;
@@ -132,6 +136,10 @@ void executeMovement(const differential_drive::Odometry &msg)
 		//Check Distance traveled
 		//TODO:: maybe put in checks to make sure theta stays the same
 		double distance = hypot(initialX-msg.x,initialY-msg.y);
+		if(inSamePlace(msg))
+		{
+			MIN_SPEED += .001;
+		}
 		if (distance > magnitude)
 		{
 			finalize();
@@ -151,6 +159,14 @@ void executeMovement(const differential_drive::Odometry &msg)
 	spd.header.stamp = ros::Time::now();
 	speed_pub.publish(spd);
 
+}
+
+bool inSamePlace(const differential_drive::Odometry &msg)
+{
+	if(abs(previousX - msg.x) <= .0001 && abs(previousY - msg.y) <= .0001)
+		return true;
+	else
+		return false;
 }
 
 void finalize()
