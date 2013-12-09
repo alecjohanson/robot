@@ -145,7 +145,7 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
 	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
 	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 4;//5		// Constant speed of the robot.
+	const double RobotSpeed = 5		// Constant speed of the robot.
 	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
@@ -232,6 +232,7 @@ void Advance(){//here i put a new condition to advance
 void Move(){
 	if(listExplore.empty()) {
 		setState(FINISHED);
+		Rotate(M_PI);
 		return;
 	}
 	exploreNode_t goal = listExplore.back();
