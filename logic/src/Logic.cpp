@@ -88,6 +88,7 @@ void addNodeDirection(){
 	if((type[1]==0)&&(type[2]==0)) {n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);}
 	if((type[4]==0)&&(type[5]==0)) {n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);}
 	if (type[0]==0) {n.direction=normalizeAngle(orientation); listExplore.push_back(n);}
+	if (type[0]==1 && type[1]==1 && type[2]==1 &&type[4]==1 &&type[5]==1){n.direction=normalizeAngle(orientation+180); listExplore.push_back(n);}
 }
 
 
@@ -230,9 +231,8 @@ void Advance(){//here i put a new condition to advance
 
 //ask the robot to move
 void Move(){
-	if(listExplore.empty()) {
+	if(listExplore.empty() || ) {
 		setState(FINISHED);
-		Rotate(M_PI);
 		return;
 	}
 	exploreNode_t goal = listExplore.back();
