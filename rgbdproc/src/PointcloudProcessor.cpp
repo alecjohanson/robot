@@ -54,13 +54,13 @@ bool PointcloudProcessor::objectDetected() const {
 inline double PointcloudProcessor::pxToPoint(point_t *pt,int16_t x, int16_t y, uint16_t z) {
 	if(z==0||z>32767) {
 		pt->p.setZero();
-		pt->category=-1;
+		pt->category=CAT_INVALID;
 		return NAN;
 	}
 	pt->p[0]=x;
 	pt->p[1]=y;
 	pt->p[2]=z;
-	pt->category=0;
+	pt->category=CAT_UNKNOWN;
 	return (pt->p.cast<double>().dot(m_floornormal))+m_camHeight;
 }
 
@@ -81,28 +81,27 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 				static_cast<const uint8_t *>(p_img)+y*linesz);
 		for(int x=0; x<w; ++x) {
-
 			uint16_t z=line[w-x-1];
 			double d;
 			if(w>320)
 				d=pxToPoint(&m_points[y][x],z*m_xlookupHD[x],z*m_ylookupHD[y],z);
 			else
 				d=pxToPoint(&m_points[y][x],z*m_xlookupSD[x],z*m_ylookupSD[y],z);
-			if(z) {
+			if(m_points[y][x].category!=CAT_INVALID) {
 				if(abs(d)<80.0) {
 					floor.addPoint(m_points[y][x].p);
-					m_points[y][x].category=1;
-				} else if(d>100.0 && d<1800.0) {
-					m_points[y][x].category=2;
-				} else {
-					m_points[y][x].category=0;
+					m_points[y][x].category=CAT_FLOOR;
+				} else if(d>100.0 && d<OBJ_MAXH) {
+					m_points[y][x].category=CAT_OBJCANDIDATE;
+				} else if(d>OBJ_MAXH+100) {
+					m_points[y][x].category=CAT_WALL;
 				}
 			}
 		}
 	}
 
 	//estimate floor plane
-	if(floor.getNumPoints()>20000) {
+	if(floor.getNumPoints()>=MIN_FLOOR_POINTS) {
 		m_camHeight=floor.getDistance();
 		m_floornormal=floor.getNormal();
 		Eigen::Vector3d z(Eigen::Vector3d(0.,0.,1.)-m_floornormal*m_floornormal[2]);
@@ -118,24 +117,29 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 	}
 
 	//convert points into floor coordinates
-#define XHIST_RESOLUTION 256
-	int16_t xhist[XHIST_RESOLUTION];
-	memset(&xhist,-1,sizeof(xhist));
+#define XHIST_RESOLUTION 128
+	float xhist[XHIST_RESOLUTION];
+	memset(&xhist,0,sizeof(xhist));
 	for(int y=0; y<h; ++y) {
 		const uint16_t * const line=reinterpret_cast<const uint16_t *>(
 				static_cast<const uint8_t *>(p_img)+y*linesz);
 		for(int x=0; x<w; ++x) {
 			point_t *p=&m_points[y][x];
-			if(p->category<=0) continue;
-			p->p=(cam2robot*p->p.cast<double>()).cast<int16_t>();
+			if(p->category<=CAT_INVALID) continue;
+
+			Eigen::Vector3d pd=cam2robot*p->p.cast<double>();
+			p->p=pd.cast<int16_t>();
 			p->p[2]+=m_camHeight;
-			int i=(((double)p->p[1]/(double)p->p[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
+
+//			if(p->category!=CAT_WALL && p->category!=CAT_FLOOR) continue;
+			if(p->category!=CAT_FLOOR) continue;
+
+			int i=((pd[1]/pd[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
 			if(i<0) i=0;
 			else if(i>=XHIST_RESOLUTION) i=XHIST_RESOLUTION-1;
-			if( (p->p[0]>xhist[i])
-					|| (i>0 && p->p[0]>xhist[i-1])
-					|| (i<XHIST_RESOLUTION-1 && p->p[0]>xhist[i+1]))
-				xhist[i]=p->p[0];
+
+			float d=hypot((double)pd[0],(double)pd[1]);
+			if(d>xhist[i]) xhist[i]=d;
 		}
 	}
 
@@ -147,21 +151,28 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		for(int x=0; x<w; ++x) {
 			point_t *p=&m_points[y][x];
 
-			if(p->category!=2) continue;
+			if(p->category!=CAT_OBJCANDIDATE) continue;
 
 			int i=(((double)p->p[1]/(double)p->p[0])*(0.5/m_maxAngle)+0.5)*XHIST_RESOLUTION;
 			if(i<0) i=0; else if(i>=XHIST_RESOLUTION) i=XHIST_RESOLUTION-1;
 
-			if(xhist[i]-p->p[0]<500.) p->category=0;
-			else ++numCandidates;
+			float d=hypot((double)p->p[0],(double)p->p[1]);
+			if((xhist[i]-d)<OBJ_MIN_WALLDIST)
+				p->category=CAT_UNKNOWN;
+			if(i>0 && (xhist[i-1]-d)<OBJ_MIN_WALLDIST)
+				p->category=CAT_UNKNOWN;
+			if(i<XHIST_RESOLUTION-1 && (xhist[i]-d)<OBJ_MIN_WALLDIST)
+				p->category=CAT_UNKNOWN;
+
+			if(p->category==CAT_OBJCANDIDATE) ++numCandidates;
 		}
 	}
-	//std::cerr<<numCandidates<<'\n';
+	std::cerr<<numCandidates<<'\n';
 
 #define MAX_BBOX 32
-	bbox_t finalBbox={0,0,0,0,0,0,0,0,0,0};
+	BoundingBox finalBbox;
 	if(numCandidates>200) {
-		bbox_t bboxes[MAX_BBOX];
+		BoundingBox bboxes[MAX_BBOX];
 		int numBbox=0;
 
 		for(int y=h-2; y>0; --y) {
@@ -181,23 +192,13 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 					if(m_points[y][x-1].category!=2 || m_points[y][x+1].category!=2) continue;
 					if(m_points[y-1][x].category!=2 || m_points[y+1][x].category!=2) continue;
 					++numBbox;
-					bboxes[b].img_xmax=x+1;
-					bboxes[b].img_xmin=x-1;
-					bboxes[b].img_ymax=y+1;
-					bboxes[b].img_ymin=y-1;
-					bboxes[b].xmin=bboxes[b].xmax=m_points[y][x].p[0];
-					bboxes[b].ymin=bboxes[b].ymax=m_points[y][x].p[1];
-					bboxes[b].zmin=bboxes[b].zmax=m_points[y][x].p[2];
-					updateBbox(&bboxes[b],&m_points[y][x-1]);
-					updateBbox(&bboxes[b],&m_points[y][x+1]);
-					updateBbox(&bboxes[b],&m_points[y-1][x]);
-					updateBbox(&bboxes[b],&m_points[y+1][x]);
+					bboxes[b].setToPoint(x,y,&m_points[y][x]);
+					bboxes[b].addPoint(x-1,y,&m_points[y][x-1]);
+					bboxes[b].addPoint(x+1,y,&m_points[y][x+1]);
+					bboxes[b].addPoint(x,y-1,&m_points[y-1][x]);
+					bboxes[b].addPoint(x,y+1,&m_points[y+1][x]);
 				} else {
-					if(x>bboxes[b].img_xmax) bboxes[b].img_xmax=x;
-					if(x<bboxes[b].img_xmin) bboxes[b].img_xmin=x;
-					if(y>bboxes[b].img_ymax) bboxes[b].img_ymax=y;
-					if(y<bboxes[b].img_ymin) bboxes[b].img_ymin=y;
-					updateBbox(&bboxes[b],&m_points[y][x]);
+					bboxes[b].addPoint(x,y,&m_points[y][x]);
 				}
 			}
 		}
@@ -205,12 +206,12 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 		int64_t bsize=0;
 		for(int i=0; i<numBbox; ++i) {
 			if(bboxes[i].zmin>160) continue;
-			if(bboxes[i].zmax>1300) continue;
-			if((bboxes[i].ymax-bboxes[i].ymin)<300) continue;
-			if((bboxes[i].zmax-bboxes[i].zmin)<200) continue;
-			if((bboxes[i].xmax-bboxes[i].xmin)<100) continue;
-			if((bboxes[i].ymax-bboxes[i].ymin)>1000) continue;
-			if((bboxes[i].xmax-bboxes[i].xmin)>1000) continue;
+			if(bboxes[i].zmax>OBJ_MAXH) continue;
+			if((bboxes[i].ymax-bboxes[i].ymin)<OBJ_MINW) continue;
+			if((bboxes[i].zmax-bboxes[i].zmin)<OBJ_MINH) continue;
+			if((bboxes[i].xmax-bboxes[i].xmin)<OBJ_MINW/3) continue;
+			if((bboxes[i].ymax-bboxes[i].ymin)>OBJ_MAXW) continue;
+			if((bboxes[i].xmax-bboxes[i].xmin)>OBJ_MAXW) continue;
 			int64_t sz=(int64_t)(bboxes[i].ymax-bboxes[i].ymin)
 					* (int64_t)(bboxes[i].zmax-bboxes[i].zmin)
 					* (int64_t)(bboxes[i].xmax-bboxes[i].xmin);
@@ -232,10 +233,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 							|| m_points[y][x].p[1]>bboxes[b].ymax+100) continue;
 					m_points[y][x].category=3;
 					++numCandidates;
-					updateBbox(&finalBbox,&m_points[y][x]);
-					if(y>finalBbox.img_ymax) finalBbox.img_ymax=y;
-					if(x>finalBbox.img_xmax) finalBbox.img_xmax=x;
-					if(x<finalBbox.img_xmin) finalBbox.img_xmin=x;
+					finalBbox.addPoint(x,y,&m_points[y][x]);
 				}
 			for(int y=finalBbox.img_ymin; y<=finalBbox.img_ymax; ++y) {
 				for(int x=finalBbox.img_xmin; x<=finalBbox.img_xmax; ++x) {
@@ -256,45 +254,9 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 	}
 	if(objectFrames<MIN_OBJ) numCandidates=0;
 
-	struct {
-		int x1,x2,y1,y2;
-	} color_bbox;
-	int cw, ch;
+	ColorBbox color_bbox;
 	if(c.isValid() && numCandidates) {
-		Eigen::Matrix3d robot2cam=cam2robot.inverse();
-		Eigen::Vector3d corner;
-		corner=robot2cam*Eigen::Vector3d(finalBbox.xmax,finalBbox.ymax,finalBbox.zmax-m_camHeight);
-		openni::CoordinateConverter::convertDepthToColor(
-				*s_depth,*s_color,
-				finalBbox.img_xmin,finalBbox.img_ymin,lrint((double)corner[2]),
-				&color_bbox.x1, &color_bbox.y1);
-		corner=robot2cam*Eigen::Vector3d(finalBbox.xmin,finalBbox.ymin,finalBbox.zmin-m_camHeight);
-		openni::CoordinateConverter::convertDepthToColor(
-				*s_depth,*s_color,
-				finalBbox.img_xmax,finalBbox.img_ymax,lrint((double)corner[2]),
-				&color_bbox.x2, &color_bbox.y2);
-		std::cerr
-			<<(finalBbox.xmax-finalBbox.xmin)<<'x'
-			<<(finalBbox.ymax-finalBbox.ymin)<<'x'
-			<<(finalBbox.zmax-finalBbox.zmin)<<"; "
-			<<color_bbox.x1<<'|'<<color_bbox.y1<<" : "
-			<<color_bbox.x2<<'|'<<color_bbox.y2<<" : "<<'\n';
-		color_bbox.x1-=80;
-		color_bbox.y1-=30;
-		color_bbox.x2+=10;
-		color_bbox.y2+=10;
-		cw=c.getVideoMode().getResolutionX();
-		ch=c.getVideoMode().getResolutionY();
-		/*if(cw>w) {
-			color_bbox.x1*=2;
-			color_bbox.x2*=2;
-			color_bbox.y1*=2;
-			color_bbox.y2*=2;
-		}*/
-		if(color_bbox.x1<0) color_bbox.x1=0;
-		if(color_bbox.y1<0) color_bbox.y1=0;
-		if(color_bbox.x2>=cw) color_bbox.x2=cw-1;
-		if(color_bbox.y2>=ch) color_bbox.y2=ch-1;
+		color_bbox.set(m_camHeight,*s_depth,*s_color,finalBbox,cam2robot);
 	}
 #ifndef NO_ROS
 	if(numCandidates) {
@@ -351,6 +313,7 @@ void PointcloudProcessor::onNewFrame(openni::VideoFrameRef& d,openni::VideoFrame
 			msg_img.is_bigendian=0;
 			msg_img.step=msg_img.width*3;
 			msg_img.data.reserve(msg_img.step*msg_img.height*3);
+			int cw=s_color->getVideoMode().getResolutionX();
 			for(int y=color_bbox.y1; y<=color_bbox.y2; ++y) {
 				const uint8_t *cpx=static_cast<const uint8_t*>(c.getData())+y*c.getStrideInBytes()+3*(cw-color_bbox.x1-1);
 				for(int x=color_bbox.x1; x<=color_bbox.x2; ++x) {
@@ -487,11 +450,96 @@ void PointcloudProcessor::setDisplay(GtkWidget* display) {
 			G_CALLBACK(expose_event_callback),m_pixbuf);
 }
 
-inline void PointcloudProcessor::updateBbox(bbox_t* b, const point_t* p) {
-	if(p->p[0]<b->xmin) b->xmin=p->p[0];
-	if(p->p[0]>b->xmax) b->xmax=p->p[0];
-	if(p->p[1]<b->ymin) b->ymin=p->p[1];
-	if(p->p[1]>b->ymax) b->ymax=p->p[1];
-	if(p->p[2]<b->zmin) b->zmin=p->p[2];
-	if(p->p[2]>b->zmax) b->zmax=p->p[2];
+void PointcloudProcessor::BoundingBox::addPoint(int16_t x, int16_t y, const point_t* p) {
+	if(x<img_xmin) img_xmin=x;
+	if(x>img_xmax) img_xmax=x;
+	if(y<img_ymin) img_ymin=y;
+	if(y>img_ymax) img_ymax=y;
+	if(p->p[0]<xmin) xmin=p->p[0];
+	if(p->p[0]>xmax) xmax=p->p[0];
+	if(p->p[1]<ymin) ymin=p->p[1];
+	if(p->p[1]>ymax) ymax=p->p[1];
+	if(p->p[2]<zmin) zmin=p->p[2];
+	if(p->p[2]>zmax) zmax=p->p[2];
+}
+
+bool PointcloudProcessor::BoundingBox::isInside(const point_t* p) {
+	if(p->p[0]<xmin || p->p[0]>xmax) return false;
+	if(p->p[1]<ymin || p->p[1]>ymax) return false;
+	if(p->p[2]<zmin || p->p[2]>zmax) return false;
+	return true;
+}
+
+PointcloudProcessor::BoundingBox::BoundingBox(int16_t x, int16_t y,
+		const point_t* p)
+:
+		img_xmin(x), img_xmax(x),
+		img_ymin(y), img_ymax(y),
+		xmin(p->p[0]), xmax(p->p[0]),
+		ymin(p->p[1]), ymax(p->p[1]),
+		zmin(p->p[2]), zmax(p->p[2])
+{}
+
+PointcloudProcessor::BoundingBox::BoundingBox()
+:
+		img_xmin(0), img_xmax(0),
+		img_ymin(0), img_ymax(0),
+		xmin(0), xmax(0),
+		ymin(0), ymax(0),
+		zmin(0), zmax(0)
+{}
+
+void PointcloudProcessor::BoundingBox::setToPoint(int16_t x, int16_t y,
+		const point_t* p) {
+	img_xmin=x; img_xmax=x;
+	img_ymin=y; img_ymax=y;
+	xmin=p->p[0]; xmax=p->p[0];
+	ymin=p->p[1]; ymax=p->p[1];
+	zmin=p->p[2]; zmax=p->p[2];
+}
+
+bool PointcloudProcessor::BoundingBox::intersects(const BoundingBox& b) {
+	if(b.xmax<xmin || b.xmin>xmax) return false;
+	if(b.ymax<ymin || b.ymin>ymax) return false;
+	if(b.zmax<zmin || b.zmin>zmax) return false;
+	return true;
+}
+
+void PointcloudProcessor::ColorBbox::set(double camHeight,
+		const openni::VideoStream &d, const openni::VideoStream &c,
+		const BoundingBox& bbox, const Eigen::Matrix3d cam2robot) {
+	Eigen::Matrix3d robot2cam=cam2robot.inverse();
+	Eigen::Vector3d corner;
+	corner=robot2cam*Eigen::Vector3d(bbox.xmax,bbox.ymax,bbox.zmax-camHeight);
+	openni::CoordinateConverter::convertDepthToColor(
+			d,c,
+			bbox.img_xmin,bbox.img_ymin,lrint((double)corner[2]),
+			&x1, &y1);
+	corner=robot2cam*Eigen::Vector3d(bbox.xmin,bbox.ymin,bbox.zmin-camHeight);
+	openni::CoordinateConverter::convertDepthToColor(
+			d,c,
+			bbox.img_xmax,bbox.img_ymax,lrint((double)corner[2]),
+			&x2, &y2);
+	std::cerr
+		<<(bbox.xmax-bbox.xmin)<<'x'
+		<<(bbox.ymax-bbox.ymin)<<'x'
+		<<(bbox.zmax-bbox.zmin)<<"; "
+		<<x1<<'|'<<y1<<" : "
+		<<x2<<'|'<<y2<<" : "<<'\n';
+	x1-=80;
+	y1-=30;
+	x2+=10;
+	y2+=10;
+	int cw=c.getVideoMode().getResolutionX();
+	int ch=c.getVideoMode().getResolutionY();
+	if(x1<0) x1=0;
+	if(y1<0) y1=0;
+	if(x2>=cw) x2=cw-1;
+	if(y2>=ch) y2=ch-1;
+}
+
+bool PointcloudProcessor::ColorBbox::isInside(int x, int y) {
+	if(x<x1 || x>x2) return false;
+	if(y<y1 || y>y2) return false;
+	return true;
 }
