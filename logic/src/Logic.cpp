@@ -115,7 +115,7 @@ void Rotate(int angle){
     spd.header.stamp = ros::Time::now();
     cmd_pub.publish(spd);
 	setState(TURN);
-	sleep(2);
+	sleep(.0000001);
 	movement::Movement move;
 	move.turn = true;
 	move.magnitude = angle*M_PI/180.0;
