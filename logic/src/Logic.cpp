@@ -88,7 +88,7 @@ void addNodeDirection(){
 	if((type[1]==0)&&(type[2]==0)) {n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);}
 	if((type[4]==0)&&(type[5]==0)) {n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);}
 	if (type[0]==0) {n.direction=normalizeAngle(orientation); listExplore.push_back(n);}
-	if (type[0]==1 && type[1]==1 && type[2]==1 &&type[4]==1 &&type[5]==1){n.direction=normalizeAngle(orientation+180); listExplore.push_back(n);}
+	if (type[0]==1 && (type[1]==1 || type[2]==1) && (type[4]==1 || type[5]==1)){n.direction=normalizeAngle(orientation+180); listExplore.push_back(n);}
 }
 
 
@@ -146,7 +146,7 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
 	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
 	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 5		// Constant speed of the robot.
+	const double RobotSpeed = 5;		// Constant speed of the robot.
 	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
@@ -231,7 +231,7 @@ void Advance(){//here i put a new condition to advance
 
 //ask the robot to move
 void Move(){
-	if(listExplore.empty() || ) {
+	if(listExplore.empty()) {
 		setState(FINISHED);
 		return;
 	}
