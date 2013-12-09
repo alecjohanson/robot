@@ -23,30 +23,32 @@ static std::vector<exploreNode_t> listExplore; //list of nodes to explore <name,
 static int name = -1; //future node name
 static int actualNode=0; //actual node position of the robot
 static int orientation; //actual robot orientation
-static std::vector<Node> nodes; //list of nodes discovered
+static std::vector<Node> nodes; //list of nodes discovered for every shift of sharps
 
 static int type[6];//type of the actual state
 static double sharpsDistance [6]; //distance in each sharps
 
-static double distance_=0;
-static double robotPosition[2]={0,0};
+static double distance_=0;//distance the robot went from one node
+static double robotPosition[2]={0,0};//position of the robot
 
 using namespace std;
 
-static double coef=0.05*M_PI/360;
-static std::vector<nodeExplore> listNodeExplored;
+static double coef=0.05*M_PI/360;//to multiply by the ticks
+static std::vector<nodeExplore> listNodeExplored;//second list of explored nodes for every wall encountered
 
+bool verbose_(false);
 
 //distance threshold for each sharp
 static const double sharpsThresholds[6]={
-		12., //f
+		12., //front
 		23.,
 		23.,
-		12., //r
+		12., //rear
 		23.,
 		23.
 };
 
+//to set the state of the robot
 typedef enum{
 	INIT=0,
 	FOLLOW_L,
@@ -65,6 +67,7 @@ static const char *states[]={
 };
 movementState_t movementState;
 
+//to set the state of the robot
 void setState(movementState_t s) {
 	if(s!=movementState) {
 		std::cerr<<states[movementState]<<" -> "<<states[s]<<std::endl;
@@ -72,16 +75,8 @@ void setState(movementState_t s) {
 	}
 }
 
-// returns if there is a wall or not
-/*
-int exists(double q,int i){
-	int exists=0;
-	if (q<10.) {exists=1;}
-	if (q<22. && i!=0 && i!=3) {exists=1;}
-	return exists;
-}
-*/
 
+//put the angle between -pi and pi
 int normalizeAngle(int angle) {
 	angle=(angle+180)%360;
 	if(angle<0) angle=360+angle;
@@ -94,21 +89,31 @@ void addNodeDirection(){
 	exploreNode_t n;
 	n.nodeIdx=name;
 	n.direction=0;
-	if((type[1]==0)&&(type[2]==0)) {n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);}
-	if((type[4]==0)&&(type[5]==0)) {n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);}
-	if (type[0]==0) {n.direction=normalizeAngle(orientation); listExplore.push_back(n);}
+	if((type[1]==0)&&(type[2]==0)) {
+		n.direction=normalizeAngle(orientation-90); listExplore.push_back(n);
+	}
+	if((type[4]==0)&&(type[5]==0)) {
+		n.direction=normalizeAngle(orientation+90); listExplore.push_back(n);
+	}
+	if (type[0]==0) {
+		n.direction=normalizeAngle(orientation); listExplore.push_back(n);
+	}
+	if ( (type[0]==1) && (type[1]==1)&&(type[2]==1)&&(type[4]==1)&&(type[5]==1)){
+		n.direction=normalizeAngle(orientation+180); listExplore.push_back(n);
+	}
 }
 
 
 //creates a new node
 void NewNode(){
-	Node newNode; name++; newNode.setName(name);
+	Node newNode;
+	updateNodeExplore();
+	newNode.setName(name);
 	newNode.addParent(actualNode); actualNode=name;
 	newNode.setType(type);
 	newNode.setOrientation(orientation);
-	updateNodeExplore();
 	nodes.push_back(newNode);
-	std::cerr << "New node "<< name <<' '<<" state "<<' ';
+	std::cerr << "New node mapping"<< name <<' '<<" state "<<' ';
 	for(int i=0; i<6; ++i) std::cerr<<type[i]<<' ';
 	std::cerr << "orientation "<<orientation<< std::endl;
 }
@@ -118,12 +123,14 @@ void NewNode(){
 
 //ask the robot to rotate
 void Rotate(int angle){
+	if (angle!=0){
 	setState(TURN);
 	movement::Movement move;
 	move.turn = true;
 	move.magnitude = angle*M_PI/180.0;
 	move.header.stamp = ros::Time::now();
 	cmd_move.publish(move);
+	}
 }
 
 
@@ -146,10 +153,10 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	differential_drive::Speed spd;//the motors like in fakemotors
 	const double IR_rightD = 16.2;		// distance between ch4 and ch8.
 	const double K_forward = 0.5; 			// Control coefficient --> ask GB.
-	const double Wheel2Wall_D = 5.; 		// distance from the wheel to a wall.
+	const double Wheel2Wall_D = 4.; 		// distance from the wheel to a wall.
 	const double k_theta = 6;//8			// Control coefficient --> Ask GB.
-	const double RobotSpeed = 6;		// Constant speed of the robot.
-	const double MaxFowardAngle = 0.12;//0.14	// Max angle where the robot is allowed to move forward in radians.
+	const double RobotSpeed = 2;		// Constant speed of the robot.
+	const double MaxFowardAngle = 0.15;//0.14	// Max angle where the robot is allowed to move forward in radians.
 
 	if(wall==1)
 		setState(FOLLOW_R);
@@ -177,8 +184,11 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	double Right_Center_WallD = 0;
 	double Robot2Wall_Angle = 0;
 
+
 	Robot2Wall_Angle = -atan( (FrontSensor-RearSensor)/(IR_rightD) ); // changed to d.
 	Right_Center_WallD = (FrontSensor+RearSensor)*0.5*cos(Robot2Wall_Angle); // distance to the wall.
+
+
 
 	double turn=1;//active theta-control if near wall only
 	double forward=1;//active x-control if
@@ -191,15 +201,17 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	{forward=1;turn=0;}
 
 	// Control
-	double w = wall*(K_forward*(Right_Center_WallD-Wheel2Wall_D)*forward - k_theta*Robot2Wall_Angle*turn);
+	double w = 0.2*wall*(K_forward*(Right_Center_WallD-Wheel2Wall_D)*forward - k_theta*Robot2Wall_Angle*turn);
+	if(verbose_) std::cerr<<"w: "<<w<<std::endl;
 
 	double v = forward*RobotSpeed;
+
 	//speeds
 	double w1 = 1*(-w+v);//right wheel
-	double w2 = 1*(v+w); //left wheel
+	double w2 = 1*(v-w); //left wheel
 
 	// Debugg output
-	//std::cerr<<FrontRightSensor<<' '<<RearRightSensor<<' '<<w<<"RIGHT: "<<w1<<" LEFT: "<<w2<<' '<<std::endl;
+
 
 	// Publish into the speed topic.
 
@@ -210,18 +222,22 @@ void followWall(int wall){//here i played with wheel2wall and ktheta
 	//std::cerr << "Speed R: "<< spd.W1 <<", L:"<<spd.W2 << std::endl;
 }
 
+//to set the way the robot advances
+void Advance(){
 
-void Advance(){//here i put a new condition to advance
 	if (type[4]+type[5]==2 && sharpsDistance[4]<12) {
-		if (type[1]+type[2]!=2) {followWall(-1);}
+		if (type[1]+type[2]!=2) {followWall(-1);}//if wall on left follow left
 		else {
 			if (sharpsDistance[4]+sharpsDistance[5]<=sharpsDistance[1]+sharpsDistance[2])
 			{followWall(-1);}
 			else followWall(1);
+			//if two walls, follow the nearest one
 		}
 	}
 	else {if (type[1]+type[2]==2 && sharpsDistance[1]<12) {followWall(1);}
-		  else goAhead();}
+	//follow right
+		  else goAhead();//if nothing go straight without wall
+	}
 }
 
 //ask the robot to move
@@ -232,8 +248,10 @@ void Move(){
 	}
 	exploreNode_t goal = listExplore.back();
 	listExplore.pop_back();
-	//we'll make milestone 2 later
+
 	int angle=normalizeAngle(goal.direction-orientation); orientation=goal.direction;
+
+	cerr<<"angle: "<<angle;
 	Rotate(angle);
 	Advance();
 }
@@ -241,6 +259,7 @@ void Move(){
 
 //update the state and detect if it is new
 void newState (const sharps::Distance &msg){
+
 	sharpsDistance[0]=msg.front;
 	sharpsDistance[1]=msg.front_r;
 	sharpsDistance[2]=msg.rear_r;
@@ -250,6 +269,7 @@ void newState (const sharps::Distance &msg){
 
 	bool sameState=true;
 
+
 	for(int i=0; i<6; ++i) {
 		int newtype=(sharpsDistance[i]<sharpsThresholds[i])?1:0;
 		if(newtype!=type[i]) {type[i]=newtype;}
@@ -258,6 +278,7 @@ void newState (const sharps::Distance &msg){
 	  sameState = false;
 	}
 	
+
 	if(movementState==FINISHED) return;
 	if(movementState==TURN) return;
 	if(movementState!=INIT && sameState) {
@@ -276,6 +297,7 @@ void newState (const sharps::Distance &msg){
 		default: break;
 		}
 	} else {
+
 		NewNode();
 		Move();
 	}
@@ -299,6 +321,7 @@ void movementCompletedHandler(const movement::Movement &msg) {
 void updateNodeExplore(){
 
 	int node=alreadyVisited();
+	cerr<<"node"<<node;
 
 	if (node!=-1){
 	  listNodeExplored[node].disposition[-normalizeAngle(orientation-180)/90][0]=actualNode;
@@ -314,9 +337,6 @@ void updateNodeExplore(){
 	  nodeExplore n;
 
 	  if(name==-1){
-	    //not so useful because next case contains it
-	    //= new nodeExplore();
-	    //n.nodeExplore();
 		  n.init();
 	    n.name=0;
 	    	for(int i=0;i<4;i++){
@@ -327,10 +347,13 @@ void updateNodeExplore(){
 	    n.position[0]=0;
 	    n.position[1]=0;
 	    node=name;
+
+	    listNodeExplored.push_back(n);
+
 	  }
 	  else{
-	    //nodeExplore n;
-		  n.init();
+
+		n.init();
 	    n.name=0;
 	    for(int i=0;i<4;i++){
 	    	n.disposition[i][0]=-1;
@@ -360,6 +383,7 @@ int alreadyVisited(){
 	double dist=INFINITY;
 	int node =-1;
 	int test = listNodeExplored.size();
+	cout<<"test "<< test<<endl;
 	if (test==0){
 		return -1;
 	}
@@ -487,12 +511,14 @@ int main(int argc, char** argv)
 {
 	ros::init(argc, argv, "Logic");
 	ros::NodeHandle nh;
-	cmd_pub =  nh.advertise<differential_drive::Speed>("motion/Speed", 1);
-	cmd_move =  nh.advertise<movement::Movement>("simpleMovement/move",1);
-	sharps_sub = nh.subscribe("sharps/Distance/",1,newState);
-	obj_sub = nh.subscribe("objdetect/spotted",1,objdetectHandler);
-	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",1,movementCompletedHandler);
-	encoders = nh.subscribe("motion/Encoders",1,EncodersHandler);
+
+	sharps_sub = nh.subscribe("sharps/Distance/",10,newState);
+	obj_sub = nh.subscribe("objdetect/spotted",10,objdetectHandler);
+	move_complete_sub = nh.subscribe("simpleMovement/moveCompleted",10,movementCompletedHandler);
+	encoders = nh.subscribe("motion/Encoders",10,EncodersHandler);
+	cmd_pub =  nh.advertise<differential_drive::Speed>("motion/Speed", 10);
+	cmd_move =  nh.advertise<movement::Movement>("simpleMovement/move",10);
+
 
 	ros::Rate loop_rate(100);
 	while(ros::ok())
